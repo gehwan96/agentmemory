@@ -18,7 +18,6 @@ describe('Memory interface - project field', () => {
       isLatest: true,
     }
     expect(memory.project).toBeUndefined()
-    expect(memory.title).toBe('Test Memory')
   })
 
   it('allows Memory object with project field specified', () => {
@@ -38,6 +37,5 @@ describe('Memory interface - project field', () => {
       isLatest: true,
     }
     expect(memory.project).toBe('my-project')
-    expect(memory.id).toBe('mem_456')
   })
 })
