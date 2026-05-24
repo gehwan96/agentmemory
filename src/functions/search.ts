@@ -340,15 +340,27 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         return s ?? null
       }
 
-      // First pass: filter by session (sequential — benefits from session cache).
+      // First pass: filter by session or memory project (sequential — benefits from session cache).
       const candidates: typeof results = []
       for (const r of results) {
         if (candidates.length >= effectiveLimit) break
         if (filtering) {
           const s = await loadSession(r.sessionId)
-          if (!s) continue
-          if (projectFilter && s.project !== projectFilter) continue
-          if (cwdFilter && s.cwd !== cwdFilter) continue
+          if (s) {
+            // Session-backed observation: filter by session project/cwd
+            if (projectFilter && s.project !== projectFilter) continue
+            if (cwdFilter && s.cwd !== cwdFilter) continue
+          } else {
+            // No session → try Memory.project direct lookup (mem::remember entries)
+            if (projectFilter) {
+              const mem = await kv.get<Memory>(KV.memories, r.obsId).catch(() => null)
+              if (!mem) continue  // unknown entry without session or memory — skip
+              // undefined project = public legacy layer, passes all project filters
+              if (mem.project !== undefined && mem.project !== projectFilter) continue
+            }
+            // cwdFilter on sessionless entry: no cwd data available, skip
+            if (cwdFilter) continue
+          }
         }
         candidates.push(r)
       }

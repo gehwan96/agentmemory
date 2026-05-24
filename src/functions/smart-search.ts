@@ -5,6 +5,8 @@ import type {
   CompressedObservation,
   HybridSearchResult,
   Lesson,
+  Memory,
+  Session,
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
@@ -92,7 +94,33 @@ export function registerSmartSearchFunction(
           : Promise.resolve([]),
       ]);
 
-      const compact: CompactSearchResult[] = hybridResults.map((r) => ({
+      // Apply project filter if specified
+      let filteredResults = hybridResults;
+      if (data.project) {
+        const projectFilter = data.project;
+        const filtered = await Promise.all(
+          hybridResults.map(async (r) => {
+            // mem::remember entries: check Memory.project directly
+            const mem = await kv.get<Memory>(KV.memories, r.observation.id).catch(() => null);
+            if (mem !== null && mem !== undefined) {
+              // undefined project = public legacy layer = passes
+              if (mem.project !== undefined && mem.project !== projectFilter) return null;
+              return r;
+            }
+            // Regular session observation: check session project
+            const session = await kv.get<Session>(KV.sessions, r.sessionId).catch(() => null);
+            if (session) {
+              if (session.project !== projectFilter) return null;
+              return r;
+            }
+            // No Memory and no Session found: skip
+            return null;
+          })
+        );
+        filteredResults = filtered.filter((r): r is HybridSearchResult => r !== null);
+      }
+
+      const compact: CompactSearchResult[] = filteredResults.map((r) => ({
         obsId: r.observation.id,
         sessionId: r.sessionId,
         title: r.observation.title,
