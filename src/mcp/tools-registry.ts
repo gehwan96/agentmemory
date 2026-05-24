@@ -219,6 +219,30 @@ export const CORE_TOOLS: McpToolDef[] = [
     },
   },
   {
+    name: "memory_recall_global",
+    description:
+      "Search across all projects without isolation. Use when you need cross-project context or want to search all stored memories regardless of which repository they came from. Unlike memory_recall and memory_smart_search (which are scoped to the current project), this tool spans all projects.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query",
+        },
+        limit: {
+          type: "number",
+          description: "Max results (default 10)",
+        },
+        projects: {
+          type: "string",
+          description:
+            "Comma-separated project names to include (omit to search all projects)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "memory_commit_lookup",
     description:
       "Look up the agent session(s) that produced a specific git commit, given its SHA. Returns the commit metadata and linked sessions.",
@@ -934,6 +958,7 @@ const ESSENTIAL_TOOLS = new Set([
   "memory_recall",
   "memory_consolidate",
   "memory_smart_search",
+  "memory_recall_global",
   "memory_sessions",
   "memory_diagnose",
   "memory_lesson_save",

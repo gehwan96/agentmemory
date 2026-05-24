@@ -1251,6 +1251,66 @@ export function registerMcpEndpoints(
             };
           }
 
+          case "memory_recall_global": {
+            if (typeof args.query !== "string" || !args.query.trim()) {
+              return {
+                status_code: 400,
+                body: { error: "query is required for memory_recall_global" },
+              };
+            }
+            const limit = Math.max(1, Math.min(100, asNumber(args.limit, 10) ?? 10));
+            const projects = parseCsvList(args.projects);
+
+            if (projects.length === 0) {
+              const result = await sdk.trigger({
+                function_id: "mem::smart-search",
+                payload: { query: args.query, limit },
+              });
+              return {
+                status_code: 200,
+                body: { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] },
+              };
+            }
+
+            // Per-project parallel search; undefined items pass each project filter automatically.
+            type CompactResult = { obsId: string; score: number; [key: string]: unknown };
+            const perProject = await Promise.all(
+              projects.map((project) =>
+                sdk
+                  .trigger({
+                    function_id: "mem::smart-search",
+                    payload: { query: args.query, limit, project },
+                  })
+                  .then((r) => {
+                    const res = r as { results?: CompactResult[] };
+                    return res.results ?? [];
+                  })
+                  .catch(() => [] as CompactResult[]),
+              ),
+            );
+
+            // Merge and deduplicate by obsId, keeping highest score
+            const seen = new Map<string, CompactResult>();
+            for (const results of perProject) {
+              for (const r of results) {
+                const existing = seen.get(r.obsId);
+                if (!existing || r.score > existing.score) seen.set(r.obsId, r);
+              }
+            }
+            const merged = Array.from(seen.values())
+              .sort((a, b) => b.score - a.score)
+              .slice(0, limit);
+
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify({ mode: "compact", results: merged }, null, 2) },
+                ],
+              },
+            };
+          }
+
           default:
             return {
               status_code: 400,
