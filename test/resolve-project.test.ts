@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveProject } from "../src/mcp/resolve-project.js";
 import type { Session } from "../src/types.js";
+import type { StateKV } from "../src/state/kv.js";
 import { KV } from "../src/state/schema.js";
 
 function mockKV() {
@@ -25,13 +26,13 @@ function mockKV() {
 
 describe("resolveProject", () => {
   it("returns 'default' when sessionId is undefined", async () => {
-    const kv = mockKV() as any;
+    const kv = mockKV() as unknown as StateKV;
     const result = await resolveProject(undefined, kv);
     expect(result).toBe("default");
   });
 
   it("returns Session.project when sessionId exists and Session is found", async () => {
-    const kv = mockKV() as any;
+    const kv = mockKV() as unknown as StateKV;
     const session: Session = {
       id: "sess_1",
       project: "Alimtalk",
@@ -47,7 +48,7 @@ describe("resolveProject", () => {
   });
 
   it("returns 'default' when sessionId exists but Session is not found", async () => {
-    const kv = mockKV() as any;
+    const kv = mockKV() as unknown as StateKV;
     const result = await resolveProject("nonexistent_sess", kv);
     expect(result).toBe("default");
   });
