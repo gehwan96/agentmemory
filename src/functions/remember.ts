@@ -80,6 +80,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
           concepts: data.concepts || [],
           files: data.files || [],
           sessionIds: [],
+          project: data.project,
           strength: 7,
           version: supersededId ? supersededVersion + 1 : 1,
           parentId: supersededId,
@@ -88,7 +89,6 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
             (id): id is string => typeof id === "string" && id.length > 0,
           ),
           isLatest: true,
-          project: data.project,
         };
 
         if (data.ttlDays && typeof data.ttlDays === "number" && data.ttlDays > 0) {
