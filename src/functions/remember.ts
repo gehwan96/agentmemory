@@ -18,6 +18,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
       files?: string[];
       ttlDays?: number;
       sourceObservationIds?: string[];
+      project?: string;
     }) => {
       if (
         !data.content ||
@@ -87,6 +88,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
             (id): id is string => typeof id === "string" && id.length > 0,
           ),
           isLatest: true,
+          project: data.project,
         };
 
         if (data.ttlDays && typeof data.ttlDays === "number" && data.ttlDays > 0) {
