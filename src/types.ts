@@ -88,6 +88,7 @@ export interface Memory {
   concepts: string[];
   files: string[];
   sessionIds: string[];
+  project?: string;
   strength: number;
   version: number;
   parentId?: string;
