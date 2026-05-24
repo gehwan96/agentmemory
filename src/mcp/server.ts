@@ -113,14 +113,14 @@ export function registerMcpEndpoints(
                 body: { error: "token_budget must be a positive integer" },
               };
             }
-            const recallSessionId = asNonEmptyString(args.sessionId);
-            const recallProject = await resolveProject(recallSessionId, kv);
+            const sessionId = asNonEmptyString(args.sessionId);
+            const project = await resolveProject(sessionId, kv);
             const result = await sdk.trigger({ function_id: "mem::search", payload: {
               query: args.query,
               limit: typeof args.limit === "number" ? args.limit : 10,
               format,
               token_budget: tokenBudget,
-              project: recallProject,
+              project,
             } });
             const text =
               format === "narrative" &&
@@ -176,14 +176,14 @@ export function registerMcpEndpoints(
                 ? args.files.split(",").map((f: string) => f.trim()).filter(Boolean)
                 : [];
 
-            const saveSessionId = asNonEmptyString(args.sessionId);
-            const saveProject = await resolveProject(saveSessionId, kv);
+            const sessionId = asNonEmptyString(args.sessionId);
+            const project = await resolveProject(sessionId, kv);
             const result = await sdk.trigger({ function_id: "mem::remember", payload: {
               content: args.content,
               type,
               concepts,
               files,
-              project: saveProject,
+              project,
             } });
             return {
               status_code: 200,
@@ -264,15 +264,15 @@ export function registerMcpEndpoints(
             }
             const expandIds = parseCsvList(args.expandIds).slice(0, 20);
             const limit = Math.max(1, Math.min(100, asNumber(args.limit, 10) ?? 10));
-            const smartSearchSessionId = asNonEmptyString(args.sessionId);
-            const smartSearchProject = await resolveProject(smartSearchSessionId, kv);
+            const sessionId = asNonEmptyString(args.sessionId);
+            const project = await resolveProject(sessionId, kv);
             const result = await sdk.trigger({
               function_id: "mem::smart-search",
               payload: {
                 query: args.query,
                 expandIds,
                 limit,
-                project: smartSearchProject,
+                project,
               },
             });
             return {
