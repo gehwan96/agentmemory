@@ -32,6 +32,10 @@ export const CORE_TOOLS: McpToolDef[] = [
           type: "number",
           description: "Optional token budget to trim returned results",
         },
+        sessionId: {
+          type: "string",
+          description: "Current session ID used to infer the active project",
+        },
       },
       required: ["query"],
     },
@@ -74,6 +78,10 @@ export const CORE_TOOLS: McpToolDef[] = [
         files: {
           type: "string",
           description: "Comma-separated relevant file paths",
+        },
+        sessionId: {
+          type: "string",
+          description: "Current session ID used to infer the active project",
         },
       },
       required: ["content"],
@@ -122,6 +130,10 @@ export const CORE_TOOLS: McpToolDef[] = [
           description: "Comma-separated observation IDs to expand",
         },
         limit: { type: "number", description: "Max results (default 10)" },
+        sessionId: {
+          type: "string",
+          description: "Current session ID used to infer the active project",
+        },
       },
       required: ["query"],
     },
