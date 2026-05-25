@@ -960,6 +960,7 @@
     <button data-tab="activity">Activity</button>
     <button data-tab="profile">Profile</button>
     <button data-tab="replay">Replay</button>
+    <button data-tab="aliases">Aliases</button>
   </div>
 
   <div id="flag-banners" class="flag-banners"></div>
@@ -976,6 +977,7 @@
   <div id="view-activity" class="view"></div>
   <div id="view-profile" class="view"></div>
   <div id="view-replay" class="view"></div>
+  <div id="view-aliases" class="view"></div>
 
   <div id="modal-overlay" class="modal-overlay">
     <div class="modal" id="modal"></div>
@@ -1064,7 +1066,7 @@
       task: '&#9745;', other: '&#128196;'
     };
     var CB_STATE_COLORS = { closed: 'badge-green', open: 'badge-red', 'half-open': 'badge-yellow' };
-    var TAB_IDS = ['dashboard', 'graph', 'memories', 'timeline', 'sessions', 'lessons', 'actions', 'crystals', 'audit', 'activity', 'profile', 'replay'];
+    var TAB_IDS = ['dashboard', 'graph', 'memories', 'timeline', 'sessions', 'lessons', 'actions', 'crystals', 'audit', 'activity', 'profile', 'replay', 'aliases'];
 
     var state = {
       activeTab: 'dashboard',
@@ -1080,6 +1082,7 @@
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
+      aliases: { loaded: false, confirmed: [], pending: [], rejected: [] },
       flagsConfig: null,
       flagsDismissed: {},
       ws: null
@@ -1257,6 +1260,7 @@
         case 'activity': if (!state.activity.loaded) await loadActivity(); break;
         case 'profile': if (!state.profile.loaded) await loadProfile(); break;
         case 'replay': if (!state.replay.loaded) await loadReplay(); break;
+        case 'aliases': if (!state.aliases.loaded) await loadAliases(); break;
       }
     }
 
@@ -3183,6 +3187,123 @@
       document.getElementById('audit-op-filter').addEventListener('change', function() {
         state.audit.opFilter = this.value;
         renderAudit();
+      });
+    }
+
+    async function loadAliases() {
+      var el = document.getElementById('view-aliases');
+      el.innerHTML = '<div class="loading">Loading aliases...</div>';
+      var confirmed = await apiGet('aliases');
+      var store = await apiGet('aliases/pending');
+      state.aliases.confirmed = (confirmed && confirmed.aliases) || [];
+      state.aliases.pending = (store && store.pending) || [];
+      state.aliases.rejected = (store && store.rejected) || [];
+      state.aliases.loaded = true;
+      renderAliases();
+    }
+
+    async function refreshAliases() {
+      state.aliases.loaded = false;
+      await loadAliases();
+    }
+
+    function renderAliases() {
+      var el = document.getElementById('view-aliases');
+      var confirmed = state.aliases.confirmed;
+      var pending = state.aliases.pending;
+      var rejected = state.aliases.rejected;
+
+      var pendingBadge = pending.length > 0
+        ? ' <span style="background:var(--accent);color:#fff;border-radius:9999px;font-size:9px;padding:1px 6px;margin-left:4px;">' + pending.length + '</span>'
+        : '';
+
+      var html = '<div class="card" style="margin-bottom:16px;">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+      html += '<h3 style="margin:0;font-size:14px;">Confirmed Aliases</h3>';
+      html += '<button class="btn btn-primary" style="font-size:11px;" data-action="alias-add-form">+ Add</button>';
+      html += '</div>';
+      if (confirmed.length === 0) {
+        html += '<div class="empty-state" style="padding:16px 0;"><p style="color:var(--ink-faint);font-style:italic;">No confirmed aliases yet. Auto-detection will add entries here when confident matches are found.</p></div>';
+      } else {
+        html += '<table class="metric-table"><thead><tr><th>Canonical</th><th>Aliases</th><th></th></tr></thead><tbody>';
+        confirmed.forEach(function(entry) {
+          html += '<tr>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc(entry.canonical) + '</td>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc((entry.aliases || []).join(', ')) + '</td>';
+          html += '<td><button class="btn" style="font-size:9px;padding:1px 6px;color:var(--destructive);" data-action="alias-delete" data-canonical="' + esc(entry.canonical) + '">Delete</button></td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Pending section
+      html += '<div class="card" style="margin-bottom:16px;">';
+      html += '<h3 style="margin:0 0 12px;font-size:14px;">Pending Suggestions' + pendingBadge + '</h3>';
+      if (pending.length === 0) {
+        html += '<div class="empty-state" style="padding:16px 0;"><p style="color:var(--ink-faint);font-style:italic;">No pending suggestions. When a new project is detected with similar naming, it will appear here for review.</p></div>';
+      } else {
+        html += '<table class="metric-table"><thead><tr><th>Project A</th><th>Project B</th><th>Score</th><th>Signals</th><th>Detected</th><th></th></tr></thead><tbody>';
+        pending.forEach(function(p) {
+          html += '<tr>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc(p.projectA) + '</td>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc(p.projectB) + '</td>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc((p.score * 100).toFixed(0)) + '%</td>';
+          html += '<td style="font-size:10px;color:var(--ink-muted);">' + esc((p.signals || []).join(', ')) + '</td>';
+          html += '<td style="font-size:10px;color:var(--ink-faint);">' + esc(formatTime(p.detectedAt)) + '</td>';
+          html += '<td style="white-space:nowrap;">';
+          html += '<button class="btn btn-primary" style="font-size:9px;padding:1px 6px;margin-right:4px;" data-action="alias-approve" data-id="' + esc(p.id) + '" data-canonical="' + esc(p.projectA) + '">Approve</button>';
+          html += '<button class="btn" style="font-size:9px;padding:1px 6px;color:var(--destructive);" data-action="alias-reject" data-id="' + esc(p.id) + '">Reject</button>';
+          html += '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Rejected section (collapsed)
+      if (rejected.length > 0) {
+        html += '<details style="margin-bottom:16px;"><summary style="font-size:12px;color:var(--ink-muted);cursor:pointer;">Recent Rejections (' + rejected.length + ')</summary>';
+        html += '<div class="card" style="margin-top:8px;">';
+        html += '<table class="metric-table"><thead><tr><th>Project A</th><th>Project B</th><th>Rejected</th></tr></thead><tbody>';
+        rejected.forEach(function(r) {
+          html += '<tr>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc(r.projectA) + '</td>';
+          html += '<td style="font-family:var(--font-mono);font-size:11px;">' + esc(r.projectB) + '</td>';
+          html += '<td style="font-size:10px;color:var(--ink-faint);">' + esc(formatTime(r.rejectedAt)) + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table></div></details>';
+      }
+
+      el.innerHTML = html;
+
+      el.querySelectorAll('[data-action]').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          var action = this.dataset.action;
+          if (action === 'alias-delete') {
+            var canonical = this.dataset.canonical;
+            if (!confirm('Delete alias for "' + canonical + '"?')) return;
+            await apiDelete('aliases/' + encodeURIComponent(canonical));
+            await refreshAliases();
+          } else if (action === 'alias-approve') {
+            var id = this.dataset.id;
+            await apiPost('aliases/pending/' + id + '/approve', { canonical: this.dataset.canonical });
+            await refreshAliases();
+          } else if (action === 'alias-reject') {
+            var id = this.dataset.id;
+            await apiPost('aliases/pending/' + id + '/reject', {});
+            await refreshAliases();
+          } else if (action === 'alias-add-form') {
+            var canonical = prompt('Canonical project name:');
+            if (!canonical) return;
+            var aliasesRaw = prompt('Aliases (comma-separated):');
+            if (!aliasesRaw) return;
+            var aliases = aliasesRaw.split(',').map(function(a) { return a.trim(); }).filter(Boolean);
+            await apiPost('aliases', { canonical: canonical.trim(), aliases: aliases });
+            await refreshAliases();
+          }
+        });
       });
     }
 

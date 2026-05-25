@@ -965,6 +965,53 @@ const ESSENTIAL_TOOLS = new Set([
   "memory_reflect",
 ]);
 
+export const V_PROJECT_ALIAS_TOOLS: McpToolDef[] = [
+  {
+    name: "memory_project_alias_list",
+    description:
+      "List all project alias mappings. Use to see which short names (e.g. 'E-mail') are mapped to full canonical paths so that memory_recall can find memories stored under either name.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "memory_project_alias_add",
+    description:
+      "Add or merge a project alias mapping. After adding, memory_recall and memory_smart_search will match memories tagged with either the canonical name or any of its aliases.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        canonical: {
+          type: "string",
+          description: "Canonical project name (usually the absolute path, e.g. /Users/me/project-a)",
+        },
+        aliases: {
+          type: "array",
+          items: { type: "string" },
+          description: "Alternative names to map to this canonical (e.g. ['E-mail', 'email-service'])",
+        },
+      },
+      required: ["canonical", "aliases"],
+    },
+  },
+  {
+    name: "memory_project_alias_remove",
+    description:
+      "Remove a project alias entry or a single alias from an entry. Provide 'canonical' to delete the entire mapping, or 'alias' to remove only that specific alias.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        canonical: {
+          type: "string",
+          description: "Remove the entire entry with this canonical name",
+        },
+        alias: {
+          type: "string",
+          description: "Remove only this specific alias (entry is kept if other aliases remain)",
+        },
+      },
+    },
+  },
+];
+
 export function getAllTools(): McpToolDef[] {
   return [
     ...CORE_TOOLS,
@@ -975,6 +1022,7 @@ export function getAllTools(): McpToolDef[] {
     ...V070_TOOLS,
     ...V073_TOOLS,
     ...V010_SLOTS_TOOLS,
+    ...V_PROJECT_ALIAS_TOOLS,
   ];
 }
 

@@ -11,6 +11,13 @@ import type {
 import { getVisibleTools } from "./tools-registry.js";
 import { timingSafeCompare } from "../auth.js";
 import { resolveProject } from "./resolve-project.js";
+import {
+  loadProjectAliases,
+  resolveCanonicalProject,
+  saveProjectAliases,
+  loadPendingAliases,
+  savePendingAliases,
+} from "./project-aliases.js";
 
 type McpResponse = {
   status_code: number;
@@ -1251,6 +1258,72 @@ export function registerMcpEndpoints(
             };
           }
 
+          case "memory_project_alias_list": {
+            const aliases = loadProjectAliases();
+            return {
+              status_code: 200,
+              body: {
+                content: [{ type: "text", text: JSON.stringify({ aliases }, null, 2) }],
+              },
+            };
+          }
+
+          case "memory_project_alias_add": {
+            if (typeof args.canonical !== "string" || !args.canonical.trim()) {
+              return { status_code: 400, body: { error: "canonical is required" } };
+            }
+            if (!Array.isArray(args.aliases) || args.aliases.length === 0) {
+              return { status_code: 400, body: { error: "aliases must be a non-empty array" } };
+            }
+            const newAliases = (args.aliases as unknown[]).filter(
+              (a): a is string => typeof a === "string" && a.trim().length > 0,
+            );
+            if (newAliases.length === 0) {
+              return { status_code: 400, body: { error: "aliases must contain at least one non-empty string" } };
+            }
+            const canonical = args.canonical.trim();
+            const current = loadProjectAliases();
+            const idx = current.findIndex((e) => e.canonical === canonical);
+            if (idx >= 0) {
+              const merged = new Set([...current[idx].aliases, ...newAliases]);
+              current[idx].aliases = Array.from(merged);
+            } else {
+              current.push({ canonical, aliases: newAliases });
+            }
+            saveProjectAliases(current);
+            return {
+              status_code: 200,
+              body: { content: [{ type: "text", text: JSON.stringify({ ok: true, aliases: current }, null, 2) }] },
+            };
+          }
+
+          case "memory_project_alias_remove": {
+            const removeCanonical =
+              typeof args.canonical === "string" && args.canonical.trim()
+                ? args.canonical.trim()
+                : null;
+            const removeAlias =
+              typeof args.alias === "string" && args.alias.trim()
+                ? args.alias.trim()
+                : null;
+            if (!removeCanonical && !removeAlias) {
+              return { status_code: 400, body: { error: "provide canonical or alias to remove" } };
+            }
+            let current = loadProjectAliases();
+            if (removeCanonical) {
+              current = current.filter((e) => e.canonical !== removeCanonical);
+            } else if (removeAlias) {
+              current = current
+                .map((e) => ({ ...e, aliases: e.aliases.filter((a) => a !== removeAlias) }))
+                .filter((e) => e.aliases.length > 0);
+            }
+            saveProjectAliases(current);
+            return {
+              status_code: 200,
+              body: { content: [{ type: "text", text: JSON.stringify({ ok: true, aliases: current }, null, 2) }] },
+            };
+          }
+
           case "memory_recall_global": {
             if (typeof args.query !== "string" || !args.query.trim()) {
               return {
@@ -1259,7 +1332,8 @@ export function registerMcpEndpoints(
               };
             }
             const limit = Math.max(1, Math.min(100, asNumber(args.limit, 10) ?? 10));
-            const projects = parseCsvList(args.projects);
+            // Normalize each project name to its canonical form so alias-tagged memories are found.
+            const projects = parseCsvList(args.projects).map(resolveCanonicalProject);
 
             if (projects.length === 0) {
               const result = await sdk.trigger({
@@ -1796,5 +1870,162 @@ export function registerMcpEndpoints(
     type: "http",
     function_id: "mcp::prompts::get",
     config: { api_path: "/agentmemory/mcp/prompts/get", http_method: "POST" },
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Project Alias REST API (used by the :3113 web viewer admin UI)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  sdk.registerFunction(
+    "aliases::confirmed::get",
+    async (req: ApiRequest): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      return { status_code: 200, body: { aliases: loadProjectAliases() } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::confirmed::get",
+    config: { api_path: "/agentmemory/aliases", http_method: "GET" },
+  });
+
+  sdk.registerFunction(
+    "aliases::confirmed::add",
+    async (
+      req: ApiRequest<{ canonical?: unknown; aliases?: unknown }>,
+    ): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const canonical = asNonEmptyString(req.body?.canonical);
+      if (!canonical) {
+        return { status_code: 400, body: { error: "canonical is required" } };
+      }
+      const aliasInput = req.body?.aliases;
+      const aliasList = Array.isArray(aliasInput)
+        ? aliasInput.filter((a): a is string => typeof a === "string" && a.trim().length > 0).map((a) => a.trim())
+        : [];
+      const existing = loadProjectAliases();
+      const entry = existing.find((e) => e.canonical === canonical);
+      if (entry) {
+        for (const a of aliasList) {
+          if (!entry.aliases.includes(a)) entry.aliases.push(a);
+        }
+      } else {
+        existing.push({ canonical, aliases: aliasList });
+      }
+      saveProjectAliases(existing);
+      return { status_code: 200, body: { ok: true } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::confirmed::add",
+    config: { api_path: "/agentmemory/aliases", http_method: "POST" },
+  });
+
+  sdk.registerFunction(
+    "aliases::confirmed::delete",
+    async (req: ApiRequest): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const url = (req as unknown as { url?: string }).url ?? "";
+      const canonical = decodeURIComponent(url.replace(/^.*\/agentmemory\/aliases\//, "").split("?")[0] ?? "");
+      if (!canonical) {
+        return { status_code: 400, body: { error: "canonical path param required" } };
+      }
+      const existing = loadProjectAliases().filter((e) => e.canonical !== canonical);
+      saveProjectAliases(existing);
+      return { status_code: 200, body: { ok: true } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::confirmed::delete",
+    config: { api_path: "/agentmemory/aliases/:canonical", http_method: "DELETE" },
+  });
+
+  sdk.registerFunction(
+    "aliases::pending::get",
+    async (req: ApiRequest): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      return { status_code: 200, body: loadPendingAliases() };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::pending::get",
+    config: { api_path: "/agentmemory/aliases/pending", http_method: "GET" },
+  });
+
+  sdk.registerFunction(
+    "aliases::pending::approve",
+    async (
+      req: ApiRequest<{ canonical?: unknown }>,
+    ): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const url = (req as unknown as { url?: string }).url ?? "";
+      const id = decodeURIComponent(url.replace(/^.*\/agentmemory\/aliases\/pending\//, "").replace(/\/approve$/, "").split("?")[0] ?? "");
+      if (!id) {
+        return { status_code: 400, body: { error: "id path param required" } };
+      }
+      const store = loadPendingAliases();
+      const idx = store.pending.findIndex((p) => p.id === id);
+      if (idx === -1) {
+        return { status_code: 404, body: { error: "pending entry not found" } };
+      }
+      const entry = store.pending[idx]!;
+      const canonical = asNonEmptyString(req.body?.canonical) ?? entry.projectA;
+      const alias = canonical === entry.projectA ? entry.projectB : entry.projectA;
+      store.pending.splice(idx, 1);
+      savePendingAliases(store);
+      const confirmed = loadProjectAliases();
+      const existing = confirmed.find((e) => e.canonical === canonical);
+      if (existing) {
+        if (!existing.aliases.includes(alias)) existing.aliases.push(alias);
+      } else {
+        confirmed.push({ canonical, aliases: [alias] });
+      }
+      saveProjectAliases(confirmed);
+      return { status_code: 200, body: { ok: true } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::pending::approve",
+    config: { api_path: "/agentmemory/aliases/pending/:id/approve", http_method: "POST" },
+  });
+
+  sdk.registerFunction(
+    "aliases::pending::reject",
+    async (req: ApiRequest): Promise<McpResponse> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const url = (req as unknown as { url?: string }).url ?? "";
+      const id = decodeURIComponent(url.replace(/^.*\/agentmemory\/aliases\/pending\//, "").replace(/\/reject$/, "").split("?")[0] ?? "");
+      if (!id) {
+        return { status_code: 400, body: { error: "id path param required" } };
+      }
+      const store = loadPendingAliases();
+      const idx = store.pending.findIndex((p) => p.id === id);
+      if (idx === -1) {
+        return { status_code: 404, body: { error: "pending entry not found" } };
+      }
+      const entry = store.pending.splice(idx, 1)[0]!;
+      store.rejected.push({
+        projectA: entry.projectA,
+        projectB: entry.projectB,
+        rejectedAt: new Date().toISOString(),
+      });
+      savePendingAliases(store);
+      return { status_code: 200, body: { ok: true } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "aliases::pending::reject",
+    config: { api_path: "/agentmemory/aliases/pending/:id/reject", http_method: "POST" },
   });
 }

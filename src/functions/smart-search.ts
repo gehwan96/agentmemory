@@ -12,6 +12,7 @@ import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { recordAccessBatch } from "./access-tracker.js";
 import { logger } from "../logger.js";
+import { expandProjectAliases, isPendingProject, expandWithPending } from "../mcp/project-aliases.js";
 
 // Compact mode trims each lesson's content for at-a-glance display. The
 // full content is fetched via memory_lesson_recall when the caller needs it.
@@ -97,20 +98,25 @@ export function registerSmartSearchFunction(
       // Apply project filter if specified
       let filteredResults = hybridResults;
       if (data.project) {
-        const projectFilter = data.project;
+        // Expand to include confirmed aliases + pending pair candidates.
+        const projectAliasSet = new Set(
+          isPendingProject(data.project)
+            ? expandWithPending(data.project)
+            : expandProjectAliases(data.project),
+        );
         const filtered = await Promise.all(
           hybridResults.map(async (r) => {
             // mem::remember entries: check Memory.project directly
             const mem = await kv.get<Memory>(KV.memories, r.observation.id).catch(() => null);
             if (mem !== null && mem !== undefined) {
               // undefined project = public legacy layer = passes
-              if (mem.project !== undefined && mem.project !== projectFilter) return null;
+              if (mem.project !== undefined && !projectAliasSet.has(mem.project)) return null;
               return r;
             }
             // Regular session observation: check session project
             const session = await kv.get<Session>(KV.sessions, r.sessionId).catch(() => null);
             if (session) {
-              if (session.project !== projectFilter) return null;
+              if (!projectAliasSet.has(session.project ?? "")) return null;
               return r;
             }
             // No Memory and no Session found: skip

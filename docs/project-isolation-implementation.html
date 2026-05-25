@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>agentmemory C안 — project 격리 구현 결과</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f9fafb;
+      --bg-code: #f3f4f6;
+      --bg-card: #ffffff;
+      --text: #1f2937;
+      --text-muted: #6b7280;
+      --text-soft: #9ca3af;
+      --accent: #7c3aed;
+      --accent-light: #ede9fe;
+      --accent-dark: #6d28d9;
+      --border: #e5e7eb;
+      --border-strong: #d1d5db;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+      --shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code, pre { font-family: "JetBrains Mono", Menlo, Monaco, Consolas, "Courier New", monospace; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 24px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-alt);
+    }
+
+    .sidebar-logo { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .sidebar-tagline { font-size: 12px; color: var(--text-muted); margin-bottom: 32px; }
+    .sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+
+    .sidebar nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .sidebar nav a:hover { background: var(--accent-light); color: var(--accent); }
+
+    .sidebar nav a.section-header {
+      color: var(--text-soft);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      padding-top: 16px;
+      padding-bottom: 4px;
+    }
+
+    .main { padding: 64px; max-width: 1024px; }
+    section { margin-bottom: 96px; scroll-margin-top: 32px; }
+
+    h1 { font-size: 48px; font-weight: 900; letter-spacing: -0.03em; margin: 0 0 16px; line-height: 1.05; }
+    h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 8px; padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+    h3 { font-size: 22px; font-weight: 700; margin: 32px 0 12px; letter-spacing: -0.01em; }
+    h4 { font-size: 17px; font-weight: 700; margin: 24px 0 8px; color: var(--text); }
+
+    .section-label {
+      display: inline-block;
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    p { margin: 12px 0; max-width: 720px; }
+    p.lead { font-size: 18px; color: var(--text-muted); max-width: 720px; }
+
+    .hero {
+      padding: 48px 0 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .hero-icon { font-size: 64px; line-height: 1; margin-bottom: 16px; }
+    .slogan { font-size: 20px; font-weight: 600; color: var(--accent); margin-bottom: 24px; font-style: italic; }
+
+    .notice-box {
+      background: #ddf4ff;
+      border: 1px solid #0969da;
+      border-left: 4px solid #0969da;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 14px;
+    }
+
+    .notice-box .notice-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #0969da;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .notice-box p { margin: 0; color: var(--text); line-height: 1.7; }
+
+    .approach-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .approach-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      background: var(--bg-card);
+      border-top: 4px solid;
+    }
+
+    .approach-card.easy  { border-top-color: var(--success); }
+    .approach-card.mid   { border-top-color: var(--warning); }
+    .approach-card.hard  { border-top-color: var(--accent); }
+
+    .approach-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .approach-card.easy .approach-badge  { color: var(--success); }
+    .approach-card.mid  .approach-badge  { color: #92400e; }
+    .approach-card.hard .approach-badge  { color: var(--accent-dark); }
+
+    .approach-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .approach-desc  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+    .callout {
+      background: var(--accent-light);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .callout.warn {
+      background: #fef3c7;
+      border-left-color: var(--warning);
+    }
+
+    .callout.info {
+      background: #ddf4ff;
+      border-left-color: #0969da;
+    }
+
+    .callout.danger {
+      background: #fef2f2;
+      border-left-color: var(--danger);
+    }
+
+    pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 16px 0;
+    }
+
+    .code-block { margin: 16px 0; }
+    .code-filename {
+      background: var(--border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--text-muted);
+      border-radius: 8px 8px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+
+    .code-block pre { margin-top: 0; border-radius: 0 0 8px 8px; border-top: none; }
+
+    code:not(pre code) {
+      background: var(--bg-code);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: var(--accent-dark);
+    }
+
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+
+    th {
+      background: var(--bg-alt);
+      font-weight: 700;
+      color: var(--text);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td.ok  { color: var(--success); font-weight: 700; }
+    td.bad { color: var(--danger);  font-weight: 700; }
+    td.mid { color: var(--warning); font-weight: 700; }
+
+    .mermaid { display: inline-block; min-width: 100%; }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin: 24px 0;
+    }
+
+    .split > div {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .split h4 { margin-top: 0; }
+
+    .step-list { list-style: none; padding: 0; margin: 16px 0; }
+
+    .step-list li {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .step-list li:last-child { border-bottom: none; }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-new { background: #dcfce7; color: #166534; }
+    .badge-mod { background: var(--accent-light); color: var(--accent-dark); }
+
+    .scenario-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 16px 0;
+      background: var(--bg-card);
+    }
+
+    .scenario-card h4 { margin-top: 0; color: var(--accent); }
+
+    .scenario-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-family: "JetBrains Mono", monospace;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+
+    .scenario-flow .arrow { color: var(--text-muted); }
+    .scenario-flow .ok-tag { color: var(--success); font-weight: 700; }
+    .scenario-flow .bad-tag { color: var(--danger); font-weight: 700; }
+
+    footer {
+      margin-top: 96px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 32px 24px; }
+      .approach-grid { grid-template-columns: 1fr; }
+      .split { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+      h2 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">🔒 C안 구현</div>
+      <div class="sidebar-tagline">project 격리 구현 결과</div>
+      <nav>
+        <a href="#hero">개요</a>
+        <span class="section-header">배경</span>
+        <a href="#background">1. 왜 C안이었나</a>
+        <a href="#diff">2. 가이드 vs 실제 코드</a>
+        <span class="section-header">설계 & 구현</span>
+        <a href="#architecture">3. 아키텍처</a>
+        <a href="#implementation">4. 변경된 파일</a>
+        <a href="#demo">5. 사용 예시</a>
+        <span class="section-header">검증 & 운영</span>
+        <a href="#tests">6. 테스트</a>
+        <a href="#migration">7. 마이그레이션</a>
+        <a href="#fork-ops">8. fork 운영</a>
+        <a href="#references">9. 참고</a>
+      </nav>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+
+      <!-- ============ HERO ============ -->
+      <section id="hero" class="hero">
+        <div class="hero-icon">🔒</div>
+        <h1>agentmemory<br>project 격리 구현</h1>
+        <p class="slogan">단일 인스턴스로 50+ 레포의 메모리를 자동 분리한다</p>
+        <p class="lead">agentmemory fork(<code>feat/project-isolation</code>)에 <code>project</code> 필드를 추가해 cwd 기반으로 메모리를 자동 격리한 C안의 실제 구현 기록이다. 10개 커밋, 10개 소스 파일, 19개 신규 테스트.</p>
+
+        <div class="notice-box">
+          <div class="notice-title">이 문서에 대해</div>
+          <p>이 문서는 <a href="../../nc-notification-email/docs/agentmemory-multi-repo-guide.html">agentmemory 멀티 레포 운영 가이드</a>에서 제안한 C안을 실제로 <code>rohitg00/agentmemory</code> fork(v0.9.21)에 적용한 구현 결과다. 가이드가 v0.x 기준 추정이라 코드와 일치하지 않는 부분이 있었으며, 이 문서는 <strong>실제 코드 기준</strong>으로 그 차이를 정리한다.</p>
+        </div>
+      </section>
+
+      <!-- ============ BACKGROUND ============ -->
+      <section id="background">
+        <span class="section-label">배경</span>
+        <h2>왜 C안이었나</h2>
+
+        <p><code>/Users/nhn/project/</code> 하위 50+ 레포(개인·회사 혼재)에 Claude Code를 사용하는데, agentmemory가 단일 글로벌 KV 구조라 모든 레포의 메모리가 한 SQLite에 섞인다.</p>
+
+        <div class="approach-grid">
+          <div class="approach-card easy">
+            <div class="approach-badge">방안 A</div>
+            <div class="approach-title">별도 인스턴스</div>
+            <div class="approach-desc">레포마다 포트를 달리해 agentmemory를 각각 실행. 완전한 물리 격리지만 50+ 레포 × 포트 운영이 무거워진다.</div>
+          </div>
+          <div class="approach-card mid">
+            <div class="approach-badge">방안 B</div>
+            <div class="approach-title">concepts 태그</div>
+            <div class="approach-desc">메모리 저장 시 <code>[repo:알림톡]</code> 같은 태그를 붙이는 규약. 에이전트 규율에 의존해 누락 위험이 있다.</div>
+          </div>
+          <div class="approach-card hard">
+            <div class="approach-badge">방안 C ✓</div>
+            <div class="approach-title">fork + project 필드</div>
+            <div class="approach-desc">단일 인스턴스를 유지하면서 <code>Memory.project</code> 필드로 논리적 격리. cwd에서 자동 추론하므로 에이전트 규율 불필요.</div>
+          </div>
+        </div>
+
+        <h3>결정 요약</h3>
+        <table>
+          <thead><tr><th>#</th><th>결정 사항</th><th>선택</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>격리 수준</td><td>논리적 분리만 (단일 DB, <code>project</code> 필드로 구분)</td></tr>
+            <tr><td>2</td><td>기존 메모리</td><td><code>mem::export</code> 백업 → DB wipe → 새 fork 적용</td></tr>
+            <tr><td>3</td><td>project 결정 방식</td><td>sessionId → <code>Session.project</code> 자동 추론 고정 (인자/env override 불가)</td></tr>
+            <tr><td>4</td><td>fork 운영</td><td>GitHub fork + 주기적 upstream sync (rebase) + 가능하면 상류 PR</td></tr>
+            <tr><td>5</td><td>크로스 프로젝트 검색</td><td><code>memory_recall_global</code> 별도 도구로 분리. 기본 도구는 cwd 고정</td></tr>
+            <tr><td>6</td><td><code>project=undefined</code> 정책</td><td>모든 project에서 보이는 <strong>공용 레거시 레이어</strong>로 동작</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============ DIFF ============ -->
+      <section id="diff">
+        <span class="section-label">설계 검토</span>
+        <h2>가이드 vs 실제 코드</h2>
+
+        <p>원본 가이드는 v0.x 기준 추정으로 작성됐고, v0.9.21 실제 코드와 중요한 차이가 있었다. 본 구현은 <strong>실제 코드 기준</strong>으로 작성됐다.</p>
+
+        <table>
+          <thead>
+            <tr><th>가이드의 주장</th><th>실제 코드 (v0.9.21)</th><th>함의</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SQLite <code>ALTER TABLE</code>로 컬럼 추가 필요</td>
+              <td>iii-sdk KV 추상화 위에 JSON 객체 저장. DB 스키마가 없음</td>
+              <td class="ok">TS 인터페이스에 필드 추가만으로 끝. 자동 역호환</td>
+            </tr>
+            <tr>
+              <td><code>inferProjectFromCwd()</code>로 자동 추론</td>
+              <td>MCP 핸들러에 cwd 컨텍스트가 없음 (자기 cwd만 보임)</td>
+              <td class="mid">session-start hook이 cwd→project 매핑 저장 중 → sessionId로 우회</td>
+            </tr>
+            <tr>
+              <td>검색 핸들러에 project 필터 신규 추가</td>
+              <td><code>mem::search</code>, <code>mem::smart-search</code>, <code>mem::lesson-recall</code>이 이미 <code>project?</code> 파라미터 보유</td>
+              <td class="ok">신규 도입이 아니라 미완성 격리를 완성하는 작업 → 상류 PR 친화적</td>
+            </tr>
+            <tr>
+              <td>ROADMAP 미언급</td>
+              <td><code>ROADMAP.md:55</code>에 "Cross-agent shared memory namespace" 미해결로 명시</td>
+              <td class="ok">상류 PR 머지 가능성 ↑</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="notice-box">
+          <div class="notice-title">mem::remember 항목 특수 처리</div>
+          <p>기존 코드의 검색 필터는 <code>Session.project</code> 기반이라 <code>KV.sessions</code>에 세션이 없는 <code>mem::remember</code> 직접 저장 항목을 처리 못했다. 이 구현은 세션을 못 찾을 때 <code>KV.memories</code>에서 <code>Memory.project</code>를 직접 비교하는 fallback 경로를 추가했다.</p>
+        </div>
+      </section>
+
+      <!-- ============ ARCHITECTURE ============ -->
+      <section id="architecture">
+        <span class="section-label">설계</span>
+        <h2>아키텍처</h2>
+
+        <h3>데이터 모델 변경</h3>
+        <p><code>Memory</code> 인터페이스에 <code>project?: string</code> 하나만 추가. optional이므로 기존 데이터와 완전히 역호환이다.</p>
+
+        <div class="code-block">
+          <div class="code-filename">src/types.ts (발췌)</div>
+          <pre><code>export interface Memory {
+  id: string;
+  // ... 기존 필드들 ...
+  sessionIds: string[];
+  project?: string;   // ★ 신규 추가 (optional, 역호환)
+  strength: number;
+  // ...
+}</code></pre>
+        </div>
+
+        <h3>project 결정 흐름</h3>
+        <p>MCP 핸들러에는 cwd가 없으므로, session-start hook이 기존에 저장해둔 <code>Session.project</code>를 sessionId로 조회한다.</p>
+
+        <div class="mermaid">
+sequenceDiagram
+    participant CC as Claude Code<br>(cwd=/project/Alimtalk)
+    participant Hook as SessionStart hook
+    participant KV as KV Store
+    participant MCP as MCP memory_save
+    participant RP as resolveProject()
+
+    CC->>Hook: 세션 시작
+    Hook->>KV: Session { id, project: "Alimtalk", cwd: "..." } 저장
+    CC->>MCP: memory_save({ content: "...", sessionId: "abc" })
+    MCP->>RP: resolveProject("abc", kv)
+    RP->>KV: KV.sessions["abc"] 조회
+    KV-->>RP: Session.project = "Alimtalk"
+    RP-->>MCP: "Alimtalk"
+    MCP->>KV: Memory { ..., project: "Alimtalk" } 저장
+        </div>
+
+        <h3>검색 격리 흐름</h3>
+        <p>검색 시에도 동일하게 sessionId → project를 추론해 필터에 전달한다. 두 종류 관찰 엔트리를 모두 처리한다.</p>
+
+        <div class="mermaid">
+flowchart TD
+    A["memory_smart_search<br>sessionId=abc"] --> B["resolveProject<br>→ Alimtalk"]
+    B --> C["mem::smart-search<br>project=Alimtalk"]
+    C --> D{"관찰 엔트리 종류"}
+    D -->|"KV.sessions 있음"| E["Session.project 비교"]
+    D -->|"KV.sessions 없음<br>mem::remember 항목"| F["KV.memories에서<br>Memory.project 직접 비교"]
+    E -->|"일치 또는<br>project=undefined"| G["결과에 포함"]
+    F -->|"일치 또는<br>project=undefined"| G
+    E -->|"불일치"| H["결과에서 제외"]
+    F -->|"불일치"| H
+        </div>
+
+        <h3>두 종류 관찰 엔트리</h3>
+        <div class="split">
+          <div>
+            <h4>① 일반 session 관찰</h4>
+            <p style="font-size:14px; margin-bottom: 0;">session-start/stop hook이 생성한 관찰. <code>KV.sessions[sessionId]</code>에 연결되어 있으므로 <code>Session.project</code>를 통해 필터링.</p>
+          </div>
+          <div>
+            <h4>② mem::remember 직접 저장</h4>
+            <p style="font-size:14px; margin-bottom: 0;"><code>memory_save</code>가 생성하는 <code>KV.memories[id]</code> 항목. 세션 없이 독립 존재하므로 <code>Memory.project</code> 직접 비교.</p>
+          </div>
+        </div>
+
+        <div class="callout info">
+          <strong>project=undefined 정책</strong>: 어느 쪽이든 <code>project</code>가 <code>undefined</code>인 항목은 모든 project 검색에서 통과된다 — 공용 레거시 레이어로 동작한다. 이전에 import하거나 project 이전에 저장된 메모리가 여기에 해당한다.
+        </div>
+      </section>
+
+      <!-- ============ IMPLEMENTATION ============ -->
+      <section id="implementation">
+        <span class="section-label">구현</span>
+        <h2>변경된 파일</h2>
+
+        <table>
+          <thead>
+            <tr><th>파일</th><th>상태</th><th>변경 요약</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>src/types.ts:88</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td><code>Memory</code> 인터페이스에 <code>project?: string</code> 추가 (<code>sessionIds</code> 아래, <code>strength</code> 위)</td>
+            </tr>
+            <tr>
+              <td><code>src/mcp/resolve-project.ts</code></td>
+              <td><span class="badge badge-new">신규</span></td>
+              <td><code>resolveProject(sessionId, kv)</code> 헬퍼. sessionId → <code>Session.project</code> → <code>'default'</code> 폴백</td>
+            </tr>
+            <tr>
+              <td><code>src/mcp/server.ts</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td><code>resolveProject</code> import. <code>memory_recall</code>·<code>memory_save</code>·<code>memory_smart_search</code> case에 project 주입. <code>memory_recall_global</code> case 신규 추가</td>
+            </tr>
+            <tr>
+              <td><code>src/mcp/tools-registry.ts</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td>3개 도구 inputSchema에 <code>sessionId</code> 추가. <code>memory_recall_global</code> 도구 등록. <code>ESSENTIAL_TOOLS</code>에 추가. CORE_TOOLS 14→15</td>
+            </tr>
+            <tr>
+              <td><code>src/functions/remember.ts</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td>입력 타입에 <code>project?: string</code>. <code>Memory</code> 빌드 시 <code>project: data.project</code> 반영</td>
+            </tr>
+            <tr>
+              <td><code>src/functions/search.ts:354-362</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td>세션 없을 때 <code>KV.memories</code> fallback 경로 추가. <code>Memory.project</code> 직접 비교</td>
+            </tr>
+            <tr>
+              <td><code>src/functions/smart-search.ts:97-121</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td><code>Memory</code>·<code>Session</code> import. <code>hybridResults</code>에 post-filter 블록 추가 (같은 두-경로 로직)</td>
+            </tr>
+            <tr>
+              <td><code>README.md</code></td>
+              <td><span class="badge badge-mod">수정</span></td>
+              <td>MCP 도구 개수 배지 53 → 54</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>핵심 코드 스니펫</h3>
+
+        <h4>① resolveProject 헬퍼</h4>
+        <div class="code-block">
+          <div class="code-filename">src/mcp/resolve-project.ts</div>
+          <pre><code>import type { StateKV } from "../state/kv.js";
+import type { Session } from "../types.js";
+import { KV } from "../state/schema.js";
+
+export async function resolveProject(
+  sessionId: string | undefined,
+  kv: StateKV,
+): Promise<string> {
+  if (!sessionId) return "default";
+  const session = await kv.get&lt;Session&gt;(KV.sessions, sessionId);
+  if (!session) return "default";
+  return session.project || "default";  // || handles empty string
+}</code></pre>
+        </div>
+
+        <h4>② memory_save에 project 주입</h4>
+        <div class="code-block">
+          <div class="code-filename">src/mcp/server.ts (memory_save case 발췌)</div>
+          <pre><code>case "memory_save": {
+  // ...
+  const sessionId = asNonEmptyString(args.sessionId);
+  const project = await resolveProject(sessionId, kv);  // ★
+  const result = await sdk.trigger({ function_id: "mem::remember", payload: {
+    content: args.content, type, concepts, files,
+    project,  // ★ 주입
+  } });
+  // ...
+}</code></pre>
+        </div>
+
+        <h4>③ smart-search.ts post-filter 블록</h4>
+        <div class="code-block">
+          <div class="code-filename">src/functions/smart-search.ts (발췌)</div>
+          <pre><code>let filteredResults = hybridResults;
+if (data.project) {
+  const projectFilter = data.project;
+  const filtered = await Promise.all(
+    hybridResults.map(async (r) => {
+      // mem::remember 항목: Memory.project 직접 비교
+      const mem = await kv.get&lt;Memory&gt;(KV.memories, r.observation.id).catch(() => null);
+      if (mem !== null && mem !== undefined) {
+        if (mem.project !== undefined && mem.project !== projectFilter) return null;
+        return r;
+      }
+      // 일반 session 관찰: Session.project 비교
+      const session = await kv.get&lt;Session&gt;(KV.sessions, r.sessionId).catch(() => null);
+      if (session) {
+        if (session.project !== projectFilter) return null;
+        return r;
+      }
+      return null;  // 세션도 메모리도 없으면 제외
+    })
+  );
+  filteredResults = filtered.filter((r): r is HybridSearchResult => r !== null);
+}</code></pre>
+        </div>
+
+        <h4>④ memory_recall_global 핸들러</h4>
+        <div class="code-block">
+          <div class="code-filename">src/mcp/server.ts (memory_recall_global case 발췌)</div>
+          <pre><code>case "memory_recall_global": {
+  const limit = Math.max(1, Math.min(100, asNumber(args.limit, 10) ?? 10));
+  const projects = parseCsvList(args.projects);
+
+  // projects 미지정: project 필터 없이 전체 검색
+  if (projects.length === 0) {
+    const result = await sdk.trigger({
+      function_id: "mem::smart-search",
+      payload: { query: args.query, limit },
+    });
+    return { status_code: 200, body: { content: [{ type: "text",
+      text: JSON.stringify(result, null, 2) }] } };
+  }
+
+  // projects 지정: 병렬 검색 후 병합 (undefined 항목은 각 project 필터에서 자동 통과)
+  const perProject = await Promise.all(
+    projects.map((project) =>
+      sdk.trigger({ function_id: "mem::smart-search",
+        payload: { query: args.query, limit, project } })
+        .then((r) => (r as { results?: CompactResult[] }).results ?? [])
+        .catch(() => []),
+    ),
+  );
+
+  // obsId 기준 중복 제거, 높은 score 우선
+  const seen = new Map&lt;string, CompactResult&gt;();
+  for (const results of perProject)
+    for (const r of results)
+      if (!seen.has(r.obsId) || r.score > seen.get(r.obsId)!.score)
+        seen.set(r.obsId, r);
+
+  const merged = Array.from(seen.values())
+    .sort((a, b) => b.score - a.score).slice(0, limit);
+
+  return { status_code: 200, body: { content: [{ type: "text",
+    text: JSON.stringify({ mode: "compact", results: merged }, null, 2) }] } };
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- ============ DEMO ============ -->
+      <section id="demo">
+        <span class="section-label">Show &amp; Tell</span>
+        <h2>사용 예시</h2>
+
+        <div class="scenario-card">
+          <h4>시나리오 1 — 프로젝트별 격리 검색</h4>
+          <p>레포 A와 B에서 각각 메모리를 저장하면, 기본 검색 도구로는 자기 레포 메모리만 보인다.</p>
+
+          <div class="code-block">
+            <div class="code-filename">레포 A (cwd = /Users/nhn/project/Alimtalk)</div>
+            <pre><code>// SessionStart hook이 자동으로 Session.project = "Alimtalk" 저장
+memory_save({ content: "알림톡 API 인증 헤더는 X-NCP-APIGW-API-KEY 사용", type: "fact", sessionId: "&lt;현재세션ID&gt;" })
+// → Memory { project: "Alimtalk", ... } 저장됨</code></pre>
+          </div>
+
+          <div class="scenario-flow">
+            <span>레포 A에서 <code>memory_smart_search("API 인증")</code></span>
+            <span class="arrow">→</span>
+            <span class="ok-tag">✓ Alimtalk 메모리 보임</span>
+          </div>
+          <div class="scenario-flow">
+            <span>레포 B에서 <code>memory_smart_search("API 인증")</code></span>
+            <span class="arrow">→</span>
+            <span class="bad-tag">✗ Alimtalk 메모리 안 보임</span>
+          </div>
+        </div>
+
+        <div class="scenario-card">
+          <h4>시나리오 2 — 공용 레거시 메모리 (project=undefined)</h4>
+          <p>import하거나 project 적용 이전에 저장된 메모리는 <code>project=undefined</code>라 모든 레포에서 보인다.</p>
+
+          <div class="code-block">
+            <div class="code-filename">import 또는 기존 데이터</div>
+            <pre><code>// project 필드 없이 저장된 Memory
+{ id: "mem-abc", content: "자주 쓰는 curl 명령어 모음", project: undefined }
+
+// project 필터가 "Alimtalk"여도 통과됨
+// → 레거시 공용 레이어로 모든 레포에서 보임</code></pre>
+          </div>
+
+          <div class="callout">
+            <strong>활용 팁</strong>: 마이그레이션 시 기존 메모리를 <code>memory_export</code> → wipe → 선별 재import하면 project=undefined로 들어가 공용 레거시가 된다. 레포 구분 없이 공유하고 싶은 메모리(공통 CLI 팁, 범용 패턴 등)를 여기 넣으면 좋다.
+          </div>
+        </div>
+
+        <div class="scenario-card">
+          <h4>시나리오 3 — cross-project 조회 (memory_recall_global)</h4>
+          <p>레포를 넘나드는 검색이 필요할 때는 <code>memory_recall_global</code>을 사용한다. 기본 도구와 달리 project 격리를 우회한다.</p>
+
+          <div class="code-block">
+            <div class="code-filename">어느 레포에서나 호출 가능</div>
+            <pre><code>// 전체 프로젝트 검색 (project 필터 없음)
+memory_recall_global({ query: "API 인증", limit: 20 })
+// → Alimtalk, nc-notification-email, tc-notification, undefined 항목 모두 반환
+
+// 특정 프로젝트만 (+ 공용 레거시 자동 포함)
+memory_recall_global({ query: "API 인증", projects: "Alimtalk,nc-notification-email" })
+// → Alimtalk + nc-notification-email + undefined 항목 반환
+// → 내부적으로 두 project를 병렬 검색 후 obsId 기준 중복 제거, score 정렬</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ TESTS ============ -->
+      <section id="tests">
+        <span class="section-label">검증</span>
+        <h2>테스트</h2>
+
+        <h3>신규 테스트 파일 (19개 테스트)</h3>
+        <table>
+          <thead>
+            <tr><th>파일</th><th>테스트 수</th><th>검증 내용</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>test/memory-project-field.test.ts</code></td>
+              <td>2</td>
+              <td><code>Memory</code> 인터페이스에 <code>project</code> 필드가 있고 직렬화 후에도 유지됨</td>
+            </tr>
+            <tr>
+              <td><code>test/remember-project.test.ts</code></td>
+              <td>4</td>
+              <td>remember 함수가 <code>project</code>를 받아 <code>Memory</code> 객체에 반영함. 미지정 시 undefined</td>
+            </tr>
+            <tr>
+              <td><code>test/resolve-project.test.ts</code></td>
+              <td>3</td>
+              <td>sessionId 있을 때 Session.project 반환 / 없을 때 'default' / 빈 문자열일 때 'default'</td>
+            </tr>
+            <tr>
+              <td><code>test/search-memory-project-filter.test.ts</code></td>
+              <td>6</td>
+              <td>mem::remember 항목의 Memory.project 필터링. 같은 project는 통과, 다른 project는 제외, undefined는 통과</td>
+            </tr>
+            <tr>
+              <td><code>test/memory-recall-global.test.ts</code></td>
+              <td>4</td>
+              <td>query 없으면 400. projects 미지정 시 project 없이 호출. projects 지정 시 병렬 호출 + 중복 제거 + score 정렬</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>회귀 검증 결과</h3>
+        <div class="callout">
+          <strong>1109개 통과</strong> — 기존 테스트 모두 통과. 실패 6개는 서버 연결 필요(<code>integration.test.ts</code>) 또는 API 키 필요(<code>embedding-provider.test.ts</code>, <code>auto-compress.test.ts</code>)로 이 구현과 무관한 환경 의존적 실패.
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>검증 항목</th><th>결과</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>test/consistency.test.ts</code> — MCP 도구 개수 54개</td>
+              <td class="ok">통과</td>
+            </tr>
+            <tr>
+              <td><code>test/mcp-standalone.test.ts</code> — CORE_TOOLS.length === 15</td>
+              <td class="ok">통과</td>
+            </tr>
+            <tr>
+              <td>기존 <code>team-share</code> (<code>KV.teamShared</code>) 기능</td>
+              <td class="ok">회귀 없음 (project 필터 의도적 미적용 유지)</td>
+            </tr>
+            <tr>
+              <td>export·import 역호환</td>
+              <td class="ok">project=undefined 항목 정상 처리 확인</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============ MIGRATION ============ -->
+      <section id="migration">
+        <span class="section-label">운영</span>
+        <h2>마이그레이션 — export → wipe → 재시작</h2>
+
+        <ul class="step-list">
+          <li>
+            <span class="step-num">1</span>
+            <div><strong>백업</strong>: <code>memory_export</code>로 전체 메모리를 JSON 파일로 저장. 이 파일은 wipe 후에도 별도 보관.</div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div><strong>wipe</strong>: agentmemory 데이터 디렉토리를 백업 후 초기화. export 파일은 별도 유지.</div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div><strong>fork 빌드 적용</strong>: <code>npm run build</code> 후 MCP 클라이언트에서 재시작 (<code>claude mcp restart agentmemory</code>).</div>
+          </li>
+          <li>
+            <span class="step-num">4</span>
+            <div><strong>자연 축적</strong>: 각 레포에서 Claude Code를 사용하면 새 메모리가 자동으로 <code>project: &lt;레포이름&gt;</code>으로 쌓이기 시작.</div>
+          </li>
+          <li>
+            <span class="step-num">5</span>
+            <div><strong>선택적 import</strong>: 백업 export에서 의미 있는 메모리만 골라 import. 이때 모두 <code>project=undefined</code>로 들어가 공용 레거시 레이어로 모든 레포에서 보임.</div>
+          </li>
+        </ul>
+
+        <div class="notice-box">
+          <div class="notice-title">데이터 격리 주의</div>
+          <p>정책상 회사·개인 레포가 같은 SQLite를 공유한다. 회사 코드 내용이 메모리에 저장될 수 있다는 점을 인지하고, 물리적 분리가 필요하다면 별도 인스턴스(방안 A) 또는 다른 접근이 필요하다.</p>
+        </div>
+      </section>
+
+      <!-- ============ FORK OPS ============ -->
+      <section id="fork-ops">
+        <span class="section-label">운영</span>
+        <h2>fork 운영</h2>
+
+        <h3>브랜치 전략</h3>
+        <div class="split">
+          <div>
+            <h4>main</h4>
+            <p style="font-size:14px; margin-bottom:0;">upstream(<code>rohitg00/agentmemory</code>) 추적용. 직접 커밋 안 함.</p>
+          </div>
+          <div>
+            <h4>feat/project-isolation</h4>
+            <p style="font-size:14px; margin-bottom:0;">C안 패치 브랜치. 이게 실제 prod 브랜치. <code>package.json</code>이나 직접 경로로 install.</p>
+          </div>
+        </div>
+
+        <h3>upstream 동기화</h3>
+        <div class="code-block">
+          <div class="code-filename">주 1회 upstream sync</div>
+          <pre><code>git fetch upstream
+git checkout feat/project-isolation
+git rebase upstream/main
+# 충돌 발생 시 수동 해결 → 보통 resolve-project.ts, remember.ts, smart-search.ts
+npm run build</code></pre>
+        </div>
+
+        <h3>상류 PR</h3>
+        <p>패치 안정화 후 <code>rohitg00/agentmemory</code>에 PR 제출을 권장한다. <code>ROADMAP.md:55</code> "Cross-agent shared memory namespace"를 해결하는 컨텍스트로 작성하면 머지 가능성이 높다. 머지되면 fork 폐기.</p>
+      </section>
+
+      <!-- ============ REFERENCES ============ -->
+      <section id="references">
+        <span class="section-label">참고</span>
+        <h2>참고</h2>
+
+        <h3>변경 커밋 목록 (총 10개)</h3>
+        <table>
+          <thead><tr><th>SHA</th><th>메시지</th></tr></thead>
+          <tbody>
+            <tr><td><code>9352e0e</code></td><td>feat(mcp): add memory_recall_global tool for cross-project search</td></tr>
+            <tr><td><code>2720a30</code></td><td>feat(search): filter mem::remember entries by Memory.project field</td></tr>
+            <tr><td><code>80d3015</code></td><td>refactor(server): simplify project resolver variable names</td></tr>
+            <tr><td><code>16459ff</code></td><td>feat(server): wire resolveProject into memory_save, recall, and smart_search</td></tr>
+            <tr><td><code>0fabfa1</code></td><td>fix(resolve-project): handle empty project string and improve test type safety</td></tr>
+            <tr><td><code>005ead9</code></td><td>feat(mcp): add resolveProject helper for session-based project lookup</td></tr>
+            <tr><td><code>0f4e7db</code></td><td>fix(remember): move project field to correct position in Memory object</td></tr>
+            <tr><td><code>6e92f3d</code></td><td>feat(remember): pass project field through to Memory object</td></tr>
+            <tr><td><code>2849b44</code></td><td>test(types): remove unrelated assertions from memory-project-field test</td></tr>
+            <tr><td><code>99e539b</code></td><td>feat(types): add optional project field to Memory interface</td></tr>
+          </tbody>
+        </table>
+
+        <h3>관련 코드 위치</h3>
+        <table>
+          <thead><tr><th>위치</th><th>내용</th></tr></thead>
+          <tbody>
+            <tr><td><code>src/types.ts:88</code></td><td>Memory.project 필드</td></tr>
+            <tr><td><code>src/mcp/resolve-project.ts</code></td><td>resolveProject 헬퍼 전체</td></tr>
+            <tr><td><code>src/mcp/server.ts:13</code></td><td>resolveProject import</td></tr>
+            <tr><td><code>src/mcp/server.ts:116-118</code></td><td>memory_recall에 project 주입</td></tr>
+            <tr><td><code>src/mcp/server.ts:179-180</code></td><td>memory_save에 project 주입</td></tr>
+            <tr><td><code>src/mcp/server.ts:267-268</code></td><td>memory_smart_search에 project 주입</td></tr>
+            <tr><td><code>src/mcp/server.ts:1254</code></td><td>memory_recall_global case 핸들러</td></tr>
+            <tr><td><code>src/functions/remember.ts:14, 87</code></td><td>project 입력 타입 + Memory 빌드</td></tr>
+            <tr><td><code>src/functions/search.ts:354-362</code></td><td>Memory.project fallback 경로</td></tr>
+            <tr><td><code>src/functions/smart-search.ts:97-121</code></td><td>hybridResults post-filter 블록</td></tr>
+            <tr><td><code>ROADMAP.md:55</code></td><td>"Cross-agent shared memory namespace" 미해결 항목</td></tr>
+          </tbody>
+        </table>
+
+        <h3>관련 문서</h3>
+        <ul>
+          <li><a href="../../nc-notification-email/docs/agentmemory-multi-repo-guide.html">agentmemory 멀티 레포 운영 — 구조 개선 가이드</a> (원본 제안 문서)</li>
+          <li><a href="https://github.com/rohitg00/agentmemory" target="_blank">rohitg00/agentmemory</a> — 원본 레포</li>
+        </ul>
+
+        <footer>
+          <p>agentmemory C안 구현 결과 — <code>feat/project-isolation</code> 브랜치 기준, v0.9.21</p>
+          <p>다이어그램은 <a href="https://mermaid.js.org/" target="_blank">Mermaid.js</a>로 렌더링. 오프라인 환경에서는 다이어그램이 표시되지 않을 수 있다.</p>
+        </footer>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", fontFamily: "inherit" });
+  </script>
+</body>
+</html>

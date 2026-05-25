@@ -1,14 +1,9 @@
 import type { StateKV } from "../state/kv.js";
 import type { Session } from "../types.js";
 import { KV } from "../state/schema.js";
+import { resolveCanonicalProject } from "./project-aliases.js";
+import { suggestAliasIfNew } from "./project-alias-suggest.js";
 
-/**
- * Resolves the current project based on sessionId.
- * 
- * @param sessionId - The session ID (optional)
- * @param kv - The StateKV instance
- * @returns The project name, or 'default' if not found
- */
 export async function resolveProject(
   sessionId: string | undefined,
   kv: StateKV,
@@ -23,5 +18,12 @@ export async function resolveProject(
     return "default";
   }
 
-  return session.project || "default";
+  const project = resolveCanonicalProject(session.project || "default");
+
+  // Fire-and-forget: detect new project values and suggest aliases automatically.
+  if (project !== "default") {
+    void suggestAliasIfNew(project, kv);
+  }
+
+  return project;
 }

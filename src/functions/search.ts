@@ -8,6 +8,7 @@ import type { EmbeddingProvider } from '../types.js'
 import { memoryToObservation } from '../state/memory-utils.js'
 import { recordAccessBatch } from './access-tracker.js'
 import { logger } from "../logger.js";
+import { expandProjectAliases, isPendingProject, expandWithPending } from "../mcp/project-aliases.js";
 
 let index: SearchIndex | null = null
 let vectorIndex: VectorIndex | null = null
@@ -340,6 +341,15 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         return s ?? null
       }
 
+      // Expand projectFilter to include confirmed aliases + pending pair candidates.
+      const projectAliasSet = projectFilter
+        ? new Set(
+            isPendingProject(projectFilter)
+              ? expandWithPending(projectFilter)
+              : expandProjectAliases(projectFilter),
+          )
+        : null
+
       // First pass: filter by session or memory project (sequential — benefits from session cache).
       const candidates: typeof results = []
       for (const r of results) {
@@ -348,15 +358,15 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
           const s = await loadSession(r.sessionId)
           if (s) {
             // Session-backed observation: filter by session project/cwd
-            if (projectFilter && s.project !== projectFilter) continue
+            if (projectAliasSet && !projectAliasSet.has(s.project ?? "")) continue
             if (cwdFilter && s.cwd !== cwdFilter) continue
           } else {
             // No session → try Memory.project direct lookup (mem::remember entries)
-            if (projectFilter) {
+            if (projectAliasSet) {
               const mem = await kv.get<Memory>(KV.memories, r.obsId).catch(() => null)
               if (!mem) continue  // unknown entry without session or memory — skip
               // undefined project = public legacy layer, passes all project filters
-              if (mem.project !== undefined && mem.project !== projectFilter) continue
+              if (mem.project !== undefined && !projectAliasSet.has(mem.project)) continue
             }
             // cwdFilter on sessionless entry: no cwd data available, skip
             if (cwdFilter) continue
