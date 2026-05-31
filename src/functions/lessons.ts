@@ -3,6 +3,7 @@ import type { StateKV } from "../state/kv.js";
 import { KV, fingerprintId } from "../state/schema.js";
 import type { Lesson } from "../types.js";
 import { recordAudit } from "./audit.js";
+import { expandProjectAliases } from "../mcp/project-aliases.js";
 
 function reinforceLesson(lesson: Lesson): void {
   const now = new Date().toISOString();
@@ -108,7 +109,8 @@ export function registerLessonsFunctions(sdk: ISdk, kv: StateKV): void {
       );
 
       if (data.project) {
-        lessons = lessons.filter((l) => l.project === data.project);
+        const projectAliasSet = new Set(expandProjectAliases(data.project));
+        lessons = lessons.filter((l) => l.project === undefined || projectAliasSet.has(l.project));
       }
 
       const scored = lessons
@@ -166,7 +168,8 @@ export function registerLessonsFunctions(sdk: ISdk, kv: StateKV): void {
       );
 
       if (data.project) {
-        lessons = lessons.filter((l) => l.project === data.project);
+        const projectAliasSet = new Set(expandProjectAliases(data.project));
+        lessons = lessons.filter((l) => l.project === undefined || projectAliasSet.has(l.project));
       }
       if (data.source) {
         lessons = lessons.filter((l) => l.source === data.source);

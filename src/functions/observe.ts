@@ -1,5 +1,5 @@
 import { TriggerAction, type ISdk } from "iii-sdk";
-import type { RawObservation, HookPayload } from "../types.js";
+import type { RawObservation, HookPayload, CompressedObservation } from "../types.js";
 import { KV, STREAM, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { stripPrivateData } from "./privacy.js";
@@ -124,12 +124,19 @@ export function registerObserveFunction(
 
       return withKeyedLock(`obs:${payload.sessionId}`, async () => {
         if (maxObservationsPerSession && maxObservationsPerSession > 0) {
-          const existing = await kv.list(KV.observations(payload.sessionId));
+          const existing = await kv.list<CompressedObservation>(KV.observations(payload.sessionId));
           if (existing.length >= maxObservationsPerSession) {
-            return {
-              success: false,
-              error: `Session observation limit reached (${maxObservationsPerSession})`,
-            };
+            const compressed = existing.filter((o) => o.title);
+            if (compressed.length === 0) {
+              return {
+                success: false,
+                error: `Session observation limit reached (${maxObservationsPerSession})`,
+              };
+            }
+            const lowest = compressed.reduce((min, o) =>
+              (o.importance ?? 5) < (min.importance ?? 5) ? o : min,
+            );
+            await kv.delete(KV.observations(payload.sessionId), lowest.id);
           }
         }
 

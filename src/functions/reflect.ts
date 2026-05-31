@@ -12,6 +12,7 @@ import type {
 } from "../types.js";
 import { recordAudit } from "./audit.js";
 import { REFLECT_SYSTEM, buildReflectPrompt } from "../prompts/reflect.js";
+import { expandProjectAliases } from "../mcp/project-aliases.js";
 
 interface ConceptCluster {
   concepts: string[];
@@ -182,7 +183,8 @@ export function registerReflectFunctions(
 
       let activeLessons = lessons.filter((l) => !l.deleted);
       if (data?.project) {
-        activeLessons = activeLessons.filter((l) => l.project === data.project);
+        const projectAliasSet = new Set(expandProjectAliases(data.project));
+        activeLessons = activeLessons.filter((l) => l.project === undefined || projectAliasSet.has(l.project));
       }
 
       let conceptClusters = buildGraphClusters(

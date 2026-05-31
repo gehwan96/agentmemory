@@ -187,7 +187,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
       const MAX_SESSIONS = 10_000;
       const MAX_MEMORIES = 50_000;
       const MAX_SUMMARIES = 10_000;
-      const MAX_OBS_PER_SESSION = 5_000;
+      const MAX_OBS_PER_IMPORT = 5_000;
       const MAX_TOTAL_OBSERVATIONS = 500_000;
       const MAX_ACCESS_LOGS = 50_000;
 
@@ -240,10 +240,10 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         if (!Array.isArray(obs)) {
           return { success: false, error: "observation values must be arrays" };
         }
-        if (obs.length > MAX_OBS_PER_SESSION) {
+        if (obs.length > MAX_OBS_PER_IMPORT) {
           return {
             success: false,
-            error: `Too many observations per session (max ${MAX_OBS_PER_SESSION})`,
+            error: `Too many observations per session (max ${MAX_OBS_PER_IMPORT})`,
           };
         }
         totalObservations += obs.length;

@@ -17,6 +17,7 @@ import {
   listPinnedSlots,
   renderPinnedContext,
 } from "./slots.js";
+import { expandProjectAliases } from "../mcp/project-aliases.js";
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3);
@@ -102,11 +103,13 @@ export function registerContextFunction(
       // lessons ahead of global ones, then weights by confidence; we cap at
       // 10 to keep the block bounded since the outer token-budget loop
       // below will drop the whole block if it doesn't fit. #457.
+      const projectAliasSet = data.project ? new Set(expandProjectAliases(data.project)) : null;
       const relevantLessons = lessons
-        .filter((l) => !l.deleted && (!l.project || l.project === data.project))
+        .filter((l) => !l.deleted && (!l.project || (projectAliasSet !== null && projectAliasSet.has(l.project))))
         .sort((a, b) => {
-          const scoreA = (a.project === data.project ? 1.5 : 1) * a.confidence;
-          const scoreB = (b.project === data.project ? 1.5 : 1) * b.confidence;
+          const inProject = (l: Lesson) => !!l.project && projectAliasSet !== null && projectAliasSet.has(l.project);
+          const scoreA = (inProject(a) ? 1.5 : 1) * a.confidence;
+          const scoreB = (inProject(b) ? 1.5 : 1) * b.confidence;
           return scoreB - scoreA;
         })
         .slice(0, 10);

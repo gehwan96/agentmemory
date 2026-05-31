@@ -213,9 +213,10 @@ describe("Lessons", () => {
       expect(result.lessons[2].confidence).toBe(0.3);
     });
 
-    it("filters by project", async () => {
+    it("filters by project (includes unscoped legacy lessons)", async () => {
+      // Lesson C has no project (legacy public) so it appears in all project-filtered results
       const result = (await sdk.trigger("mem::lesson-list", { project: "/app" })) as { lessons: Lesson[] };
-      expect(result.lessons.length).toBe(2);
+      expect(result.lessons.length).toBe(3);
     });
 
     it("filters by source", async () => {
