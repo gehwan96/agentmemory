@@ -2,6 +2,7 @@ import type { StateKV } from "../state/kv.js";
 import type { Session } from "../types.js";
 import { KV } from "../state/schema.js";
 import { basename } from "node:path";
+import { logger } from "../logger.js";
 import {
   loadProjectAliases,
   loadPendingAliases,
@@ -154,7 +155,11 @@ async function _suggestImpl(newProject: string, kv: StateKV): Promise<void> {
     if (changed) {
       savePendingAliases(store);
     }
-  } catch {
+  } catch (err) {
     // Suggestion is best-effort; never block the caller.
+    logger.warn("suggestAliasIfNew: unexpected error", {
+      project: newProject,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
