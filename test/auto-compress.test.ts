@@ -73,16 +73,25 @@ function validPayload(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe("mem::observe auto-compress gate (#138)", () => {
+  let _savedAutoCompress: string | undefined;
   beforeEach(() => {
     // Reset module cache so observe.js re-imports config.js with the
     // fresh AGENTMEMORY_AUTO_COMPRESS env state. Without this, a later
     // test that sets the env var can be undermined by cached module
     // state from an earlier test (and vice versa).
     vi.resetModules();
-    delete process.env["AGENTMEMORY_AUTO_COMPRESS"];
+    _savedAutoCompress = process.env["AGENTMEMORY_AUTO_COMPRESS"];
+    // Set to "false" rather than deleting — getMergedEnv() merges
+    // ~/.agentmemory/.env THEN process.env, so a deleted key lets the
+    // .env file value win; an explicit "false" overrides it.
+    process.env["AGENTMEMORY_AUTO_COMPRESS"] = "false";
   });
   afterEach(() => {
-    delete process.env["AGENTMEMORY_AUTO_COMPRESS"];
+    if (_savedAutoCompress !== undefined) {
+      process.env["AGENTMEMORY_AUTO_COMPRESS"] = _savedAutoCompress;
+    } else {
+      delete process.env["AGENTMEMORY_AUTO_COMPRESS"];
+    }
   });
 
   it("default (AGENTMEMORY_AUTO_COMPRESS unset): does NOT fire mem::compress", async () => {
