@@ -34,7 +34,7 @@ export const CORE_TOOLS: McpToolDef[] = [
         },
         sessionId: {
           type: "string",
-          description: "Current session ID used to infer the active project",
+          description: "Current session ID used to scope results to the active project. Always include this — omitting it disables project isolation and may surface memories from unrelated repositories.",
         },
       },
       required: ["query"],
@@ -81,7 +81,7 @@ export const CORE_TOOLS: McpToolDef[] = [
         },
         sessionId: {
           type: "string",
-          description: "Current session ID used to infer the active project",
+          description: "Current session ID used to scope results to the active project. Always include this — omitting it disables project isolation and may surface memories from unrelated repositories.",
         },
       },
       required: ["content"],
@@ -132,7 +132,7 @@ export const CORE_TOOLS: McpToolDef[] = [
         limit: { type: "number", description: "Max results (default 10)" },
         sessionId: {
           type: "string",
-          description: "Current session ID used to infer the active project",
+          description: "Current session ID used to scope results to the active project. Always include this — omitting it disables project isolation and may surface memories from unrelated repositories.",
         },
       },
       required: ["query"],

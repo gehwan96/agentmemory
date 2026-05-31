@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentmemory 파이프라인 딥다이브</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #161b22;
+  --bg3: #1c2333;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --accent: #58a6ff;
+  --accent2: #3fb950;
+  --accent3: #f78166;
+  --accent4: #d2a8ff;
+  --accent5: #ffa657;
+  --yellow: #e3b341;
+  --sidebar-w: 240px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  display: flex;
+}
+
+/* ── Sidebar ── */
+nav {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 20px 0;
+  z-index: 100;
+}
+nav .brand {
+  padding: 0 16px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+nav .brand h2 { font-size: 13px; color: var(--accent); font-weight: 600; }
+nav .brand p { font-size: 11px; color: var(--text2); margin-top: 2px; }
+nav a {
+  display: block;
+  padding: 6px 16px;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 12.5px;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+}
+nav a:hover { color: var(--text); background: var(--bg3); }
+nav a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(88,166,255,.07); }
+nav .nav-section { font-size: 10px; font-weight: 700; color: var(--text2); letter-spacing: .08em; text-transform: uppercase; padding: 14px 16px 4px; }
+
+/* ── Main ── */
+main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 960px;
+  padding: 48px 48px 80px;
+}
+
+/* ── Headings ── */
+h1 { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+h1 span { color: var(--accent); }
+.hero-sub { color: var(--text2); font-size: 14px; margin-bottom: 36px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+h2 { font-size: 20px; font-weight: 700; margin: 56px 0 16px; padding-top: 8px; color: var(--text);
+  border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+h2 .num { display: inline-block; background: var(--accent); color: #000; border-radius: 4px;
+  font-size: 12px; padding: 1px 7px; margin-right: 8px; font-weight: 800; vertical-align: middle; }
+h3 { font-size: 15px; font-weight: 600; margin: 28px 0 10px; color: var(--accent4); }
+
+/* ── Callout ── */
+.callout { border-radius: 8px; padding: 14px 16px; margin: 20px 0; font-size: 13px; }
+.callout.warn { background: rgba(255,165,0,.1); border: 1px solid rgba(255,165,0,.3); }
+.callout.warn .icon { color: var(--accent5); font-weight: 800; margin-right: 6px; }
+.callout.info { background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.25); }
+.callout.info .icon { color: var(--accent); font-weight: 800; margin-right: 6px; }
+.callout.success { background: rgba(63,185,80,.08); border: 1px solid rgba(63,185,80,.25); }
+.callout.success .icon { color: var(--accent2); font-weight: 800; margin-right: 6px; }
+.callout strong { color: var(--text); }
+.callout code { background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Menlo, monospace; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+th { background: var(--bg3); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.02); }
+td code { background: var(--bg3); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Menlo, monospace; color: var(--accent4); }
+td .on  { color: var(--accent2); font-size: 12px; font-weight: 700; }
+td .off { color: var(--text2);   font-size: 12px; }
+
+/* ── Diagram wrapper ── */
+.diagram { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 24px; margin: 20px 0; overflow-x: auto; }
+.diagram svg { display: block; margin: 0 auto; }
+.diagram-cap { font-size: 12px; color: var(--text2); text-align: center; margin-top: 12px; }
+
+/* ── Code ref ── */
+.ref { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  font-size: 11px; font-family: 'SF Mono', Menlo, monospace; color: var(--text2); padding: 1px 7px; margin: 0 2px; }
+
+/* ── Settings badge ── */
+.badge { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 12px;
+  padding: 2px 10px; margin-right: 4px; }
+.badge.on  { background: rgba(63,185,80,.15);  color: var(--accent2); border: 1px solid rgba(63,185,80,.3); }
+.badge.off { background: rgba(255,255,255,.05); color: var(--text2);   border: 1px solid var(--border); }
+
+/* ── Settings grid ── */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.setting-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.setting-card .key { font-size: 11px; font-family: 'SF Mono', Menlo, monospace; color: var(--accent4); margin-bottom: 4px; }
+.setting-card .val { font-size: 13px; font-weight: 600; color: var(--text); }
+.setting-card .desc { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+/* ── Tier badge ── */
+.tier { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
+  background: var(--accent); color: #000; border-radius: 50%; font-size: 11px; font-weight: 800;
+  margin-right: 6px; vertical-align: middle; }
+
+p { margin: 10px 0; color: var(--text); }
+ul { margin: 10px 0 10px 20px; }
+li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<nav id="nav">
+  <div class="brand">
+    <h2>agentmemory</h2>
+    <p>파이프라인 딥다이브</p>
+  </div>
+  <div class="nav-section">개요</div>
+  <a href="#settings">내 설정 요약</a>
+  <a href="#arch">전체 아키텍처</a>
+  <div class="nav-section">파이프라인</div>
+  <a href="#ingestion">1. 데이터 수집</a>
+  <a href="#compression">2. 압축</a>
+  <a href="#consolidation">3. 통합·반영</a>
+  <a href="#graph">4. 그래프</a>
+  <a href="#storage">5. 저장</a>
+  <div class="nav-section">종합</div>
+  <a href="#summary">전체 흐름 요약</a>
+  <div class="nav-section">운영·튜닝</div>
+  <a href="#lifecycle">8. 데이터 수명주기</a>
+  <a href="#secrets">9. 개인정보·Secret</a>
+  <a href="#recall-quality">10. 검색 품질</a>
+  <a href="#tuning">11. 설정 튜닝 가이드</a>
+  <a href="#env-ref">12. .env 전체 레퍼런스</a>
+</nav>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<main>
+
+<h1>agentmemory <span>파이프라인 딥다이브</span></h1>
+<p class="hero-sub">세션 학습 데이터가 어떻게 수집되고, 압축되고, 그래프로 변환되며, 저장되는지를 <strong>코드 레벨</strong>로 분석한 문서입니다.<br>모든 흐름은 <strong>박세환님의 실제 설정</strong>을 기준으로 서술합니다 (<code>~/.agentmemory/.env</code>).</p>
+
+
+<!-- ═══════════ 0. 설정 요약 ═══════════ -->
+<section id="settings">
+<h2><span class="num">0</span>내 설정 요약</h2>
+
+<div class="callout warn">
+  <span class="icon">⚠</span>
+  <strong>stale 주석 주의 —</strong> <code>.env.example:29</code>에 <em>"OPENAI_API_KEY는 임베딩 전용, chat completion은 PR #307 예정"</em>이라고 되어 있으나 이 주석은 <strong>이미 오래된 것</strong>입니다. 실제 코드 <code>src/providers/openai.ts</code>의 <code>call()</code>은 <code>POST /v1/chat/completions</code>를 호출하며, <strong>설정한 외부 LLM provider가 compress / summarize / consolidate / graph-extract / reflect를 모두 실제로 구동</strong>합니다. noop이 아닙니다.
+</div>
+
+<div class="settings-grid">
+  <div class="setting-card">
+    <div class="key">OPENAI_BASE_URL</div>
+    <div class="val">litellm-playground.nhncorp.com</div>
+    <div class="desc">NHN 내부 OpenAI 호환 프록시. /v1/chat/completions 지원.</div>
+  </div>
+  <div class="setting-card">
+    <div class="key">OPENAI_MODEL</div>
+    <div class="val">Qwen/Qwen3.5-397B-A17B-FP8</div>
+    <div class="desc">모든 LLM 호출(압축·요약·그래프·반영)에 사용되는 모델.</div>
+  </div>
+  <div class="setting-card">
+    <div class="key">EMBEDDING_PROVIDER</div>
+    <div class="val">local (384-dim)</div>
+    <div class="desc">Xenova/all-MiniLM-L6-v2. LiteLLM이 /v1/embeddings를 미지원하므로 별도 강제 지정.</div>
+  </div>
+  <div class="setting-card">
+    <div class="key">활성화된 기능 플래그</div>
+    <div class="val">
+      <span class="badge on">AUTO_COMPRESS</span>
+      <span class="badge on">CONSOLIDATION</span>
+      <span class="badge on">GRAPH_EXTRACTION</span><br>
+      <span class="badge on">INJECT_CONTEXT</span>
+      <span class="badge on">REFLECT</span>
+    </div>
+    <div class="desc">5가지 LLM 기능 전부 ON — 가장 완전한 구성.</div>
+  </div>
+</div>
+
+<table>
+  <tr><th>env 변수</th><th>값</th><th>기본값</th><th>효과</th></tr>
+  <tr><td><code>AGENTMEMORY_AUTO_COMPRESS</code></td><td class="on">true</td><td class="off">false</td><td>매 tool 호출마다 외부 LLM API로 압축 실행 (기본 OFF)</td></tr>
+  <tr><td><code>CONSOLIDATION_ENABLED</code></td><td class="on">true</td><td class="off">false</td><td>세션 종료 + 2시간마다 4-tier 통합 파이프라인</td></tr>
+  <tr><td><code>GRAPH_EXTRACTION_ENABLED</code></td><td class="on">true</td><td class="off">false</td><td>세션 종료 시 지식 그래프 노드/엣지 추출</td></tr>
+  <tr><td><code>AGENTMEMORY_INJECT_CONTEXT</code></td><td class="on">true</td><td class="off">false</td><td>세션 시작 시 과거 기억을 프롬프트에 주입</td></tr>
+  <tr><td><code>AGENTMEMORY_REFLECT</code></td><td class="on">true</td><td class="off">false</td><td>세션 종료 시 insight 자동 합성</td></tr>
+  <tr><td><code>EMBEDDING_PROVIDER</code></td><td class="on">local</td><td class="off">auto-detect</td><td>OPENAI_API_KEY 자동감지 override → Xenova 384-dim</td></tr>
+  <tr><td><code>BM25_WEIGHT / VECTOR_WEIGHT</code></td><td>0.4 / 0.6</td><td>0.4 / 0.6</td><td>기본값과 동일 — 하이브리드 검색 가중치</td></tr>
+  <tr><td><code>AGENTMEMORY_GRAPH_WEIGHT</code></td><td>0.2 (미설정→0.3)</td><td>0.3</td><td>그래프 traversal 보너스 RRF 가중치</td></tr>
+</table>
+
+</section>
+
+
+<!-- ═══════════ 1. 아키텍처 ═══════════ -->
+<section id="arch">
+<h2><span class="num">1</span>전체 아키텍처 개요</h2>
+
+<p>agentmemory는 세 레이어로 구성됩니다: <strong>Claude Code(훅)</strong>가 이벤트를 보내면 → <strong>agentmemory 데몬</strong>(REST :3111)이 비즈니스 로직을 처리하며 → <strong>iii-engine</strong>(WebSocket :49134)의 워커들이 실제 저장을 담당합니다.</p>
+
+<div class="diagram">
+<svg width="860" height="420" viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/>
+    </marker>
+    <marker id="arr2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3fb950"/>
+    </marker>
+    <marker id="arr3" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#d2a8ff"/>
+    </marker>
+  </defs>
+
+  <!-- Claude Code -->
+  <rect x="10" y="60" width="150" height="300" rx="10" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="85" y="82" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">Claude Code</text>
+  <text x="85" y="97" text-anchor="middle" fill="#8b949e" font-size="10">+ agentmemory plugin</text>
+
+  <!-- Hooks list -->
+  <rect x="20" y="108" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="119" text-anchor="middle" fill="#e3b341" font-size="10">SessionStart → /session/start</text>
+  <rect x="20" y="126" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="137" text-anchor="middle" fill="#e6edf3" font-size="10">UserPromptSubmit → /observe</text>
+  <rect x="20" y="144" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="155" text-anchor="middle" fill="#e6edf3" font-size="10">PostToolUse → /observe</text>
+  <rect x="20" y="162" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="173" text-anchor="middle" fill="#e6edf3" font-size="10">PostToolUseFailure → /observe</text>
+  <rect x="20" y="180" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="191" text-anchor="middle" fill="#e6edf3" font-size="10">PreCompact → /context</text>
+  <rect x="20" y="198" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="209" text-anchor="middle" fill="#e6edf3" font-size="10">SubagentStart/Stop → /observe</text>
+  <rect x="20" y="216" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="227" text-anchor="middle" fill="#e6edf3" font-size="10">Notification/TaskCompleted</text>
+  <rect x="20" y="234" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="245" text-anchor="middle" fill="#ffa657" font-size="10">Stop → /summarize + /end</text>
+  <rect x="20" y="252" width="130" height="14" rx="3" fill="#0d1117"/>
+  <text x="85" y="263" text-anchor="middle" fill="#ffa657" font-size="10">SessionEnd → /end + consolidate</text>
+
+  <!-- Arrow: Claude → daemon -->
+  <line x1="162" y1="210" x2="220" y2="210" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="190" y="204" text-anchor="middle" fill="#58a6ff" font-size="10">HTTP</text>
+
+  <!-- agentmemory daemon -->
+  <rect x="222" y="40" width="210" height="340" rx="10" fill="#1c2333" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="327" y="62" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">agentmemory daemon</text>
+  <text x="327" y="77" text-anchor="middle" fill="#8b949e" font-size="10">REST API :3111</text>
+
+  <!-- Functions -->
+  <rect x="232" y="90" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="105" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::observe</text>
+  <rect x="232" y="117" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="132" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::compress (→ 외부 LLM ✦)</text>
+  <rect x="232" y="144" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="159" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::summarize (map-reduce)</text>
+  <rect x="232" y="171" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="186" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::remember / mem::recall</text>
+  <rect x="232" y="198" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="213" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::graph-extract (→ 외부 LLM ✦)</text>
+  <rect x="232" y="225" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="240" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::consolidate-pipeline (✦)</text>
+  <rect x="232" y="252" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="267" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::reflect / mem::slot-reflect (✦)</text>
+  <rect x="232" y="279" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="294" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::smart-search (hybrid RRF)</text>
+  <rect x="232" y="306" width="190" height="22" rx="4" fill="#0d1117" stroke="#30363d"/>
+  <text x="327" y="321" text-anchor="middle" fill="#d2a8ff" font-size="11">mem::context (inject TOKEN_BUDGET)</text>
+  <text x="327" y="345" text-anchor="middle" fill="#8b949e" font-size="10">✦ = 외부 LLM API 호출 (provider 키 설정 시 활성화)</text>
+
+  <!-- Arrow: daemon → iii-engine -->
+  <line x1="434" y1="210" x2="490" y2="210" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr2)"/>
+  <text x="462" y="204" text-anchor="middle" fill="#3fb950" font-size="10">WS:49134</text>
+  <text x="462" y="218" text-anchor="middle" fill="#3fb950" font-size="10">iii-sdk RPC</text>
+
+  <!-- iii-engine -->
+  <rect x="492" y="40" width="200" height="300" rx="10" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="592" y="62" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="700">iii-engine v0.11.2</text>
+  <text x="592" y="77" text-anchor="middle" fill="#8b949e" font-size="10">워커 구성</text>
+
+  <rect x="502" y="88" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="102" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-http  (REST :3111)</text>
+  <rect x="502" y="112" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="126" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-state  (KV → state_store.db)</text>
+  <rect x="502" y="136" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="150" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-stream  (:3112 → stream_store)</text>
+  <rect x="502" y="160" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="174" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-queue  (builtin)</text>
+  <rect x="502" y="184" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="198" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-pubsub  (local, durable events)</text>
+  <rect x="502" y="208" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="222" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-cron  (kv, 2h consolidation)</text>
+  <rect x="502" y="232" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="246" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-observability  (traces/logs)</text>
+  <rect x="502" y="256" width="180" height="20" rx="3" fill="#0d1117"/>
+  <text x="592" y="270" text-anchor="middle" fill="#e6edf3" font-size="10.5">iii-exec  (node dist/index.mjs)</text>
+
+  <!-- Disk -->
+  <rect x="502" y="300" width="180" height="30" rx="5" fill="#0d1117" stroke="#30363d"/>
+  <text x="592" y="319" text-anchor="middle" fill="#8b949e" font-size="10">./data/state_store.db  ./data/stream_store</text>
+
+  <!-- Arrow: iii → viewer -->
+  <line x1="694" y1="160" x2="755" y2="160" stroke="#d2a8ff" stroke-width="1.5" marker-end="url(#arr3)"/>
+  <text x="724" y="154" text-anchor="middle" fill="#d2a8ff" font-size="10">stream</text>
+  <text x="724" y="168" text-anchor="middle" fill="#d2a8ff" font-size="10">:3112</text>
+
+  <!-- Viewer -->
+  <rect x="757" y="120" width="90" height="80" rx="8" fill="#1c2333" stroke="#ffa657" stroke-width="1.5"/>
+  <text x="802" y="148" text-anchor="middle" fill="#ffa657" font-size="11" font-weight="700">Viewer</text>
+  <text x="802" y="163" text-anchor="middle" fill="#8b949e" font-size="10">:3113</text>
+  <text x="802" y="178" text-anchor="middle" fill="#8b949e" font-size="10">canvas 2D</text>
+  <text x="802" y="193" text-anchor="middle" fill="#8b949e" font-size="10">WS + poll</text>
+
+  <!-- LiteLLM (external) -->
+  <rect x="222" y="390" width="210" height="24" rx="6" fill="#0d1117" stroke="#e3b341" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="327" y="406" text-anchor="middle" fill="#e3b341" font-size="11">외부 LLM provider (OpenAI 호환, 설정 가능)</text>
+  <line x1="327" y1="380" x2="327" y2="390" stroke="#e3b341" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arr)"/>
+
+  <!-- Xenova (local) -->
+  <rect x="492" y="350" width="200" height="24" rx="6" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+  <text x="592" y="366" text-anchor="middle" fill="#58a6ff" font-size="11">Xenova/all-MiniLM-L6-v2 (로컬 384-dim)</text>
+</svg>
+<p class="diagram-cap">전체 시스템 구성. ✦ 표시 함수는 외부 LLM API를 호출함(provider 키 필요). 임베딩은 별도 로컬 경로.</p>
+</div>
+</section>
+
+
+<!-- ═══════════ 2. 수집 ═══════════ -->
+<section id="ingestion">
+<h2><span class="num">2</span>데이터 수집 (Ingestion)</h2>
+
+<p>AI 코딩 세션의 모든 이벤트는 Claude Code의 <strong>12개 훅</strong>이 캡처합니다. 각 훅 스크립트는 stdin에서 이벤트 JSON을 읽어 데몬에 HTTP POST합니다. <span class="ref">src/hooks/*.ts</span></p>
+
+<div class="callout info">
+  <span class="icon">🛡</span><strong>재진입 가드 —</strong> 각 훅 스크립트는 실행 시 <code>AGENTMEMORY_SDK_CHILD=1</code> 환경변수 또는 <code>entrypoint==="sdk-ts"</code>를 감지하면 즉시 종료합니다. Stop 훅이 summarize를 호출할 때 내부에서 다시 Stop이 트리거되는 재귀 루프를 방지하는 장치입니다. <span class="ref">src/hooks/stop.ts:6</span>
+</div>
+
+<h3>훅 이벤트 → 엔드포인트 매핑</h3>
+<table>
+  <tr><th>훅 이벤트</th><th>hookType</th><th>엔드포인트</th><th>주요 페이로드</th></tr>
+  <tr><td>SessionStart</td><td>—</td><td><code>/session/start</code></td><td>sessionId, project, cwd + context 주입(INJECT_CONTEXT ON 시)</td></tr>
+  <tr><td>UserPromptSubmit</td><td>prompt_submit</td><td><code>/observe</code></td><td>userPrompt</td></tr>
+  <tr><td>PreToolUse (Edit/Write/Read/Glob/Grep)</td><td>—</td><td><code>/enrich</code></td><td>INJECT_CONTEXT ON 시에만 동작, 그 외 no-op</td></tr>
+  <tr><td>PostToolUse</td><td>post_tool_use</td><td><code>/observe</code></td><td>tool_name, tool_input, tool_output(최대 8000자), image_data?</td></tr>
+  <tr><td>PostToolUseFailure</td><td>post_tool_failure</td><td><code>/observe</code></td><td>tool_name, tool_input, error</td></tr>
+  <tr><td>PreCompact</td><td>—</td><td><code>/context</code></td><td>budget=1500, 결과를 stdout으로 출력 → Claude에 주입</td></tr>
+  <tr><td>SubagentStart</td><td>subagent_start</td><td><code>/observe</code></td><td>agent_id, agent_type (fire-and-forget)</td></tr>
+  <tr><td>SubagentStop</td><td>subagent_stop</td><td><code>/observe</code></td><td>—</td></tr>
+  <tr><td>Notification</td><td>notification</td><td><code>/observe</code></td><td>—</td></tr>
+  <tr><td>TaskCompleted</td><td>task_completed</td><td><code>/observe</code></td><td>—</td></tr>
+  <tr><td><strong>Stop</strong></td><td>—</td><td><code>/summarize</code> → <code>/session/end</code></td><td>세션 요약 트리거 + 그래프 추출(GRAPH ON 시) + reflect(REFLECT ON 시)</td></tr>
+  <tr><td><strong>SessionEnd</strong></td><td>—</td><td><code>/session/end</code> + consolidate</td><td>CONSOLIDATION ON 시 /crystals/auto + /consolidate-pipeline 추가 호출</td></tr>
+</table>
+
+<h3>관측(Observation) 처리 흐름</h3>
+<div class="diagram">
+<svg width="800" height="300" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker>
+    <marker id="a2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3fb950"/></marker>
+    <marker id="a3" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f78166"/></marker>
+  </defs>
+
+  <!-- Step 1: POST /observe -->
+  <rect x="10" y="110" width="120" height="50" rx="7" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="70" y="131" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">POST /observe</text>
+  <text x="70" y="148" text-anchor="middle" fill="#8b949e" font-size="10">hookType, sessionId</text>
+  <text x="70" y="163" text-anchor="middle" fill="#8b949e" font-size="10">project, cwd, data</text>
+
+  <line x1="131" y1="135" x2="160" y2="135" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a1)"/>
+
+  <!-- Step 2: Dedup -->
+  <rect x="162" y="110" width="100" height="50" rx="7" fill="#1c2333" stroke="#30363d"/>
+  <text x="212" y="131" text-anchor="middle" fill="#e6edf3" font-size="11">중복 해시</text>
+  <text x="212" y="148" text-anchor="middle" fill="#8b949e" font-size="10">(sessionId+tool</text>
+  <text x="212" y="163" text-anchor="middle" fill="#8b949e" font-size="10">+input fingerprint)</text>
+
+  <!-- Dup -> drop -->
+  <line x1="212" y1="110" x2="212" y2="80" stroke="#f78166" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#a3)"/>
+  <text x="212" y="72" text-anchor="middle" fill="#f78166" font-size="10">중복이면 drop</text>
+
+  <line x1="263" y1="135" x2="292" y2="135" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a1)"/>
+
+  <!-- Step 3: Privacy strip -->
+  <rect x="294" y="110" width="100" height="50" rx="7" fill="#1c2333" stroke="#30363d"/>
+  <text x="344" y="131" text-anchor="middle" fill="#e6edf3" font-size="11">개인정보</text>
+  <text x="344" y="148" text-anchor="middle" fill="#e6edf3" font-size="11">제거</text>
+  <text x="344" y="163" text-anchor="middle" fill="#8b949e" font-size="10">stripPrivateData()</text>
+
+  <line x1="395" y1="135" x2="424" y2="135" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a1)"/>
+
+  <!-- Step 4: Limit check -->
+  <rect x="426" y="100" width="110" height="70" rx="7" fill="#1c2333" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="481" y="121" text-anchor="middle" fill="#e3b341" font-size="11">관측 상한 체크</text>
+  <text x="481" y="138" text-anchor="middle" fill="#8b949e" font-size="10">MAX_OBS_PER</text>
+  <text x="481" y="153" text-anchor="middle" fill="#8b949e" font-size="10">_SESSION = 500</text>
+  <text x="481" y="168" text-anchor="middle" fill="#8b949e" font-size="10">keyed lock per session</text>
+
+  <!-- Over limit -->
+  <line x1="481" y1="100" x2="481" y2="70" stroke="#f78166" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#a3)"/>
+  <text x="481" y="62" text-anchor="middle" fill="#f78166" font-size="10">초과 시 {success:false}</text>
+
+  <line x1="537" y1="135" x2="566" y2="135" stroke="#3fb950" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- Step 5: KV + stream -->
+  <rect x="568" y="100" width="120" height="70" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="628" y="121" text-anchor="middle" fill="#3fb950" font-size="11">KV 저장 +</text>
+  <text x="628" y="138" text-anchor="middle" fill="#3fb950" font-size="11">stream 발행</text>
+  <text x="628" y="155" text-anchor="middle" fill="#8b949e" font-size="10">mem:obs:{sessionId}</text>
+  <text x="628" y="170" text-anchor="middle" fill="#8b949e" font-size="10">stream::send(viewer)</text>
+
+  <!-- Arrow down to compression -->
+  <line x1="628" y1="171" x2="628" y2="220" stroke="#3fb950" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="488" y="222" width="280" height="40" rx="7" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="628" y="240" text-anchor="middle" fill="#d2a8ff" font-size="11" font-weight="700">압축 단계로 → (섹션 3 참조)</text>
+  <text x="628" y="256" text-anchor="middle" fill="#8b949e" font-size="10">AUTO_COMPRESS=true → LLM 압축 | false → 합성 압축</text>
+</svg>
+<p class="diagram-cap">mem::observe 내부 처리 순서. observe.ts:42-280 기준.</p>
+</div>
+
+<h3>데이터 모델 계층</h3>
+<p>agentmemory의 핵심 데이터 타입은 4계층입니다. 상위로 갈수록 더 요약되고 오래 보존됩니다. <span class="ref">src/types.ts</span></p>
+
+<div class="diagram">
+<svg width="800" height="250" viewBox="0 0 800 250" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="da" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8b949e"/></marker></defs>
+
+  <!-- Session -->
+  <rect x="280" y="10" width="240" height="46" rx="8" fill="#1c2333" stroke="#58a6ff" stroke-width="2"/>
+  <text x="400" y="30" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">Session</text>
+  <text x="400" y="48" text-anchor="middle" fill="#8b949e" font-size="10">id · project · status   ·   KV: mem:sessions</text>
+
+  <line x1="400" y1="57" x2="400" y2="76" stroke="#8b949e" stroke-width="1.5" marker-end="url(#da)"/>
+
+  <!-- RawObservation -->
+  <rect x="200" y="78" width="400" height="46" rx="8" fill="#1c2333" stroke="#e3b341" stroke-width="2"/>
+  <text x="400" y="98" text-anchor="middle" fill="#e3b341" font-size="12" font-weight="700">RawObservation</text>
+  <text x="400" y="116" text-anchor="middle" fill="#8b949e" font-size="10">hookType · toolName · toolOutput   ·   KV: mem:obs:{sessionId}</text>
+
+  <line x1="400" y1="125" x2="400" y2="144" stroke="#8b949e" stroke-width="1.5" marker-end="url(#da)"/>
+
+  <!-- CompressedObservation -->
+  <rect x="100" y="146" width="600" height="58" rx="8" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="400" y="166" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">CompressedObservation</text>
+  <text x="400" y="183" text-anchor="middle" fill="#8b949e" font-size="10">title · facts[] · concepts[] · importance(1-10) · confidence</text>
+  <text x="400" y="197" text-anchor="middle" fill="#8b949e" font-size="10">KV: mem:obs:{sessionId} (RawObs 덮어씀)   ·   BM25 + 벡터 인덱스</text>
+
+  <line x1="400" y1="205" x2="400" y2="224" stroke="#8b949e" stroke-width="1.5" marker-end="url(#da)"/>
+
+  <!-- Memory -->
+  <rect x="150" y="226" width="500" height="16" rx="4" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="400" y="238" text-anchor="middle" fill="#d2a8ff" font-size="10">Memory: type · content · strength(0-10) · forgetAfter?   ·   KV: mem:memories</text>
+</svg>
+<p class="diagram-cap">Session(임시) → RawObservation(캡처) → CompressedObservation(인덱싱됨) → Memory(영속 학습)</p>
+</div>
+
+<h3>JSONL Replay / Import 경로</h3>
+<p>라이브 훅 외에, Claude Code 세션 기록(<code>~/.claude/projects/**/*.jsonl</code>)을 사후 임포트할 수 있습니다. <span class="ref">src/functions/replay.ts</span> <span class="ref">src/replay/jsonl-parser.ts</span></p>
+<ul>
+  <li>엔드포인트: <code>POST /agentmemory/replay/import-jsonl</code> → 202 Accepted (비동기)</li>
+  <li>jsonl-parser가 transcript 항목 타입별로 hookType 매핑: <code>user.text → prompt_submit</code>, <code>user.tool_result → post_tool_use/failure</code>, <code>assistant.text → stop</code>, <code>assistant.tool_use → pre_tool_use</code></li>
+  <li>project는 cwd의 마지막 경로 세그먼트에서 자동 추출</li>
+  <li>파일당 <strong>합성 압축</strong>으로 인덱싱 (LLM 없이 빠르게)</li>
+  <li>세션에서 <strong>Crystal</strong>(파일/툴/레슨 묶음) + <strong>Lesson</strong>(always/never/prefer 패턴 정규식으로 마이닝) 자동 파생</li>
+  <li>안전장치: 최대 200개 파일(MAX_FILES_DEFAULT), 민감 경로 거부(isSensitive), 심링크 거부, 탐색 캡(traversalCap)</li>
+</ul>
+</section>
+
+
+<!-- ═══════════ 3. 압축 ═══════════ -->
+<section id="compression">
+<h2><span class="num">3</span>압축 (Compression)</h2>
+
+<p>모든 RawObservation은 <strong>CompressedObservation</strong>으로 변환되어야 BM25 · 벡터 인덱스에 올라갑니다. 두 가지 경로가 있습니다.</p>
+
+<div class="diagram">
+<svg width="820" height="340" viewBox="0 0 820 340" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ca1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker>
+    <marker id="ca2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3fb950"/></marker>
+    <marker id="ca3" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#e3b341"/></marker>
+  </defs>
+
+  <!-- Branch point -->
+  <rect x="330" y="10" width="160" height="40" rx="7" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="410" y="27" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">AUTO_COMPRESS=true?</text>
+  <text x="410" y="43" text-anchor="middle" fill="#8b949e" font-size="10">isAutoCompressEnabled()</text>
+
+  <!-- Left: Synthetic -->
+  <line x1="330" y1="30" x2="160" y2="80" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ca1)"/>
+  <text x="230" y="66" text-anchor="middle" fill="#8b949e" font-size="10">false (기본값)</text>
+
+  <rect x="20" y="82" width="280" height="180" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1.5"/>
+  <text x="160" y="103" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="700">합성 압축 (zero-LLM)</text>
+  <text x="160" y="120" text-anchor="middle" fill="#8b949e" font-size="10">compress-synthetic.ts</text>
+
+  <rect x="32" y="128" width="256" height="18" rx="3" fill="#0d1117"/>
+  <text x="160" y="141" text-anchor="middle" fill="#e3b341" font-size="10">① inferType()  hookType + 툴명 → ObservationType</text>
+  <rect x="32" y="150" width="256" height="18" rx="3" fill="#0d1117"/>
+  <text x="160" y="163" text-anchor="middle" fill="#e6edf3" font-size="10">② truncate()  title 80자, subtitle 120자, narrative 400자</text>
+  <rect x="32" y="172" width="256" height="18" rx="3" fill="#0d1117"/>
+  <text x="160" y="185" text-anchor="middle" fill="#e6edf3" font-size="10">③ extractFiles()  input의 path/file_path 키 추출</text>
+  <rect x="32" y="194" width="256" height="28" rx="3" fill="#0d1117"/>
+  <text x="160" y="207" text-anchor="middle" fill="#8b949e" font-size="10">facts:[], concepts:[]  (빈 배열 — 내용 추출 없음)</text>
+  <text x="160" y="219" text-anchor="middle" fill="#8b949e" font-size="10">importance: 5 고정  confidence: 0.3 고정</text>
+  <text x="160" y="242" text-anchor="middle" fill="#8b949e" font-size="10">LLM 미호출 · 즉시 완료 · 키 없어도 동작</text>
+
+  <!-- Right: LLM -->
+  <line x1="490" y1="30" x2="640" y2="80" stroke="#e3b341" stroke-width="1.5" marker-end="url(#ca3)"/>
+  <text x="585" y="66" text-anchor="middle" fill="#e3b341" font-size="10">true (옵트인)</text>
+
+  <rect x="520" y="82" width="290" height="220" rx="8" fill="#1c2333" stroke="#e3b341" stroke-width="2"/>
+  <text x="665" y="103" text-anchor="middle" fill="#e3b341" font-size="12" font-weight="700">LLM 압축 (AUTO_COMPRESS)</text>
+  <text x="665" y="120" text-anchor="middle" fill="#8b949e" font-size="10">compress.ts / prompts/compression.ts</text>
+
+  <rect x="530" y="128" width="270" height="18" rx="3" fill="#0d1117"/>
+  <text x="665" y="141" text-anchor="middle" fill="#e6edf3" font-size="10">① input 4000자, output 4000자, prompt 2000자 절단</text>
+  <rect x="530" y="150" width="270" height="18" rx="3" fill="#0d1117"/>
+  <text x="665" y="163" text-anchor="middle" fill="#e6edf3" font-size="10">② XML 프롬프트 → 외부 LLM API POST /v1/chat/completions</text>
+  <rect x="530" y="172" width="270" height="28" rx="3" fill="#0d1117"/>
+  <text x="665" y="185" text-anchor="middle" fill="#8b949e" font-size="10">&lt;observation&gt; type/title/subtitle/facts</text>
+  <text x="665" y="197" text-anchor="middle" fill="#8b949e" font-size="10">narrative/concepts/files/importance(1-10) &lt;/observation&gt;</text>
+  <rect x="530" y="204" width="270" height="18" rx="3" fill="#0d1117"/>
+  <text x="665" y="217" text-anchor="middle" fill="#e6edf3" font-size="10">③ 파싱 실패 시 self-correct 1회 retry</text>
+  <rect x="530" y="226" width="270" height="18" rx="3" fill="#0d1117"/>
+  <text x="665" y="239" text-anchor="middle" fill="#e6edf3" font-size="10">④ scoreCompression() → confidence 값 계산</text>
+  <text x="665" y="275" text-anchor="middle" fill="#8b949e" font-size="10">매 PostToolUse 이벤트마다 1회 외부 LLM 호출 발생</text>
+
+  <!-- Common output -->
+  <rect x="300" y="285" width="220" height="44" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="410" y="305" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">CompressedObservation</text>
+  <text x="410" y="322" text-anchor="middle" fill="#8b949e" font-size="10">KV 저장 · BM25 인덱스 · 384-dim 벡터 · 스트림 발행</text>
+
+  <line x1="160" y1="263" x2="310" y2="293" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ca2)"/>
+  <line x1="665" y1="303" x2="522" y2="300" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ca2)"/>
+</svg>
+<p class="diagram-cap">AUTO_COMPRESS=true 설정 시 오른쪽 경로(외부 LLM API). 기본값은 왼쪽 합성 압축(zero-LLM)입니다.</p>
+</div>
+
+<h3>세션 요약 — Summarize Map-Reduce</h3>
+<p>Stop 훅 → <code>mem::summarize</code>가 호출됩니다. 관측 수가 많으면 청크로 나눠 병렬 처리합니다. <span class="ref">src/functions/summarize.ts</span></p>
+
+<div class="diagram">
+<svg width="800" height="200" viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="sa" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker></defs>
+
+  <!-- Total obs -->
+  <rect x="10" y="80" width="140" height="40" rx="7" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="80" y="98" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">전체 관측 목록</text>
+  <text x="80" y="113" text-anchor="middle" fill="#8b949e" font-size="10">CompressedObservation[]</text>
+
+  <!-- Branch: ≤400? -->
+  <line x1="151" y1="100" x2="200" y2="100" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#sa)"/>
+  <rect x="202" y="80" width="140" height="40" rx="7" fill="#1c2333" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="272" y="98" text-anchor="middle" fill="#e3b341" font-size="11">관측 수 ≤ 400?</text>
+  <text x="272" y="113" text-anchor="middle" fill="#8b949e" font-size="10">SUMMARIZE_CHUNK_SIZE</text>
+
+  <!-- Yes: single call -->
+  <line x1="272" y1="80" x2="272" y2="44" stroke="#3fb950" stroke-width="1.5" marker-end="url(#sa)"/>
+  <text x="272" y="38" text-anchor="middle" fill="#3fb950" font-size="10">Yes → 단일 LLM 호출</text>
+
+  <!-- No: chunks -->
+  <line x1="343" y1="100" x2="400" y2="100" stroke="#8b949e" stroke-width="1.5" marker-end="url(#sa)"/>
+  <text x="372" y="94" text-anchor="middle" fill="#8b949e" font-size="10">No</text>
+
+  <!-- Map phase -->
+  <rect x="402" y="20" width="150" height="40" rx="7" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="477" y="38" text-anchor="middle" fill="#d2a8ff" font-size="11">Map: 청크별 병렬 요약</text>
+  <text x="477" y="53" text-anchor="middle" fill="#8b949e" font-size="10">concurrency=6, retry 1회</text>
+
+  <rect x="402" y="140" width="150" height="40" rx="7" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="477" y="158" text-anchor="middle" fill="#d2a8ff" font-size="11">Map: 청크별 병렬 요약</text>
+  <text x="477" y="173" text-anchor="middle" fill="#8b949e" font-size="10">concurrency=6, retry 1회</text>
+
+  <line x1="402" y1="100" x2="360" y2="40" stroke="#d2a8ff" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="402" y1="100" x2="360" y2="100" stroke="#d2a8ff" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="402" y1="100" x2="360" y2="160" stroke="#d2a8ff" stroke-width="1" stroke-dasharray="3 2"/>
+
+  <!-- Reduce -->
+  <line x1="553" y1="40" x2="610" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#sa)"/>
+  <line x1="553" y1="160" x2="610" y2="110" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#sa)"/>
+
+  <rect x="612" y="80" width="170" height="40" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="697" y="98" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">Reduce: 최종 요약</text>
+  <text x="697" y="113" text-anchor="middle" fill="#8b949e" font-size="10">KV: mem:summaries 저장</text>
+</svg>
+<p class="diagram-cap">SUMMARIZE_CHUNK_SIZE=400, SUMMARIZE_CHUNK_CONCURRENCY=6. 50% 이상 청크 실패 시 중단(MAX_SKIP_RATIO=0.5).</p>
+</div>
+</section>
+
+
+<!-- ═══════════ 4. 통합·반영 ═══════════ -->
+<section id="consolidation">
+<h2><span class="num">4</span>통합·반영 (Consolidation & Reflection)</h2>
+
+<p>단기 관측들을 장기 지식으로 증류하는 단계입니다. <code>CONSOLIDATION_ENABLED=true</code> 설정에 의해 <strong>세션 종료 시</strong>와 <strong>2시간마다</strong> 자동 실행됩니다.</p>
+
+<div class="callout success">
+  <span class="icon">⏱</span><strong>트리거 두 가지 —</strong>
+  (1) 세션 종료 시 <code>SessionEnd</code> 훅 → <code>POST /consolidate-pipeline?force=true</code> (즉시, 강제).
+  (2) 백그라운드 <code>setInterval</code> 매 2시간(<code>CONSOLIDATION_INTERVAL_MS=7200000</code>) — 데몬이 살아있는 동안 자동 반복.
+</div>
+
+<h3>4-tier 파이프라인</h3>
+
+<div class="diagram">
+<svg width="820" height="360" viewBox="0 0 820 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ta" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker>
+  </defs>
+
+  <!-- Trigger -->
+  <rect x="320" y="10" width="180" height="30" rx="6" fill="#0d1117" stroke="#30363d"/>
+  <text x="410" y="30" text-anchor="middle" fill="#8b949e" font-size="11">mem::consolidate-pipeline</text>
+  <line x1="410" y1="41" x2="410" y2="60" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ta)"/>
+
+  <!-- Tier 1: Semantic -->
+  <rect x="160" y="62" width="500" height="60" rx="8" fill="#1c2333" stroke="#58a6ff" stroke-width="2"/>
+  <text x="220" y="82" text-anchor="middle" fill="#fff" font-size="12" font-weight="800" style="font-family:monospace">1</text>
+  <circle cx="212" cy="78" r="12" fill="#58a6ff"/>
+  <text x="212" y="83" text-anchor="middle" fill="#000" font-size="11" font-weight="800">1</text>
+  <text x="420" y="82" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">Semantic Merge (요약이 5개 이상일 때)</text>
+  <text x="420" y="97" text-anchor="middle" fill="#8b949e" font-size="10">최근 20개 SessionSummary 묶음 → 외부 LLM API로 공통 사실 추출 → &lt;fact confidence=…&gt; 파싱</text>
+  <text x="420" y="112" text-anchor="middle" fill="#8b949e" font-size="10">기존 SemanticMemory는 reinforcement(accessCount++, confidence=max), 신규는 새 항목 → KV: mem:semantic</text>
+
+  <line x1="410" y1="123" x2="410" y2="142" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ta)"/>
+
+  <!-- Tier 2: Reflect -->
+  <rect x="160" y="144" width="500" height="60" rx="8" fill="#1c2333" stroke="#d2a8ff" stroke-width="2"/>
+  <circle cx="212" cy="174" r="12" fill="#d2a8ff"/>
+  <text x="212" y="179" text-anchor="middle" fill="#000" font-size="11" font-weight="800">2</text>
+  <text x="420" y="164" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="700">Reflect — Insight 합성 (maxClusters=10)</text>
+  <text x="420" y="179" text-anchor="middle" fill="#8b949e" font-size="10">그래프 노드 BFS depth≤2로 클러스터링 → 클러스터당 ≥3 아이템이면 외부 LLM API 호출</text>
+  <text x="420" y="194" text-anchor="middle" fill="#8b949e" font-size="10">Higher-order principle 추출 → &lt;insight confidence= title=&gt; → KV: mem:insights · 24h decay sweep</text>
+
+  <line x1="410" y1="205" x2="410" y2="224" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ta)"/>
+
+  <!-- Tier 3: Procedural -->
+  <rect x="160" y="226" width="500" height="60" rx="8" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <circle cx="212" cy="256" r="12" fill="#3fb950"/>
+  <text x="212" y="261" text-anchor="middle" fill="#000" font-size="11" font-weight="800">3</text>
+  <text x="420" y="246" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">Procedural Extraction (pattern 메모리가 2개 이상)</text>
+  <text x="420" y="261" text-anchor="middle" fill="#8b949e" font-size="10">frequency≥2인 pattern 타입 Memory 수집 → 외부 LLM API로 절차적 규칙 추출</text>
+  <text x="420" y="276" text-anchor="middle" fill="#8b949e" font-size="10">&lt;procedure name= trigger=&gt;&lt;step&gt;…&lt;/step&gt; → KV: mem:procedural · frequency++ · strength+0.1</text>
+
+  <line x1="410" y1="287" x2="410" y2="306" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ta)"/>
+
+  <!-- Tier 4: Decay -->
+  <rect x="160" y="308" width="500" height="40" rx="8" fill="#1c2333" stroke="#f78166" stroke-width="2"/>
+  <circle cx="212" cy="328" r="12" fill="#f78166"/>
+  <text x="212" y="333" text-anchor="middle" fill="#000" font-size="11" font-weight="800">4</text>
+  <text x="420" y="326" text-anchor="middle" fill="#f78166" font-size="12" font-weight="700">Decay — 강도 감쇠 (CONSOLIDATION_DECAY_DAYS=30)</text>
+  <text x="420" y="341" text-anchor="middle" fill="#8b949e" font-size="10">30일마다 strength × 0.9 (기하급수). 하한 0.1. semantic + procedural 양쪽 적용.</text>
+</svg>
+<p class="diagram-cap">consolidation-pipeline.ts:50 기준. REFLECT=true 덕분에 Tier 2도 활성화됨.</p>
+</div>
+
+<h3>세션 종료 시 Reflection (REFLECT=true)</h3>
+<p>위 4-tier와는 별도로, Stop 훅 → <code>event::session::stopped</code> 이벤트 → <code>mem::slot-reflect</code>가 추가로 호출됩니다.</p>
+<ul>
+  <li>그래프 노드/엣지 + semantic 사실 + lesson + crystal을 로드</li>
+  <li>BFS depth≤2로 개념 클러스터 구성 (그래프 없으면 Jaccard 0.3 임계값 공출현 클러스터)</li>
+  <li>클러스터당 ≥3 아이템 → 외부 LLM API에 "2개 이상 소스에서 공통되는 상위 원칙" 요청</li>
+  <li>content fingerprint로 dedup: 기존 insight는 confidence += 0.1, 신규는 KV:mem:insights에 저장</li>
+  <li>최대 5개/클러스터, 총 50개 상한</li>
+</ul>
+
+<div class="callout info">
+  <span class="icon">💡</span><strong>decay 수식 —</strong>
+  <code>decayPeriods = floor(daysSince / 30)</code> → <code>newStrength = max(0.1, strength × 0.9^decayPeriods)</code>.
+  30일 비활성이면 0.9배, 60일이면 0.81배. 하한 0.1로 완전 소멸은 없음.
+</div>
+</section>
+
+
+<!-- ═══════════ 5. 그래프 ═══════════ -->
+<section id="graph">
+<h2><span class="num">5</span>그래프 (Graph Extraction & Retrieval)</h2>
+
+<h3>지식 그래프 추출</h3>
+<p>세션 Stop 시 batch로 실행됩니다. 개별 remember 호출마다 추출하지 않습니다. <span class="ref">src/functions/graph.ts</span> <span class="ref">src/triggers/events.ts:59-66</span></p>
+
+<div class="diagram">
+<svg width="800" height="240" viewBox="0 0 800 240" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="ga" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker></defs>
+
+  <rect x="10" y="95" width="130" height="50" rx="7" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="75" y="115" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">세션 종료</text>
+  <text x="75" y="132" text-anchor="middle" fill="#8b949e" font-size="10">CompressedObservation[]</text>
+  <text x="75" y="147" text-anchor="middle" fill="#8b949e" font-size="10">필터: title 있는 것만</text>
+
+  <line x1="141" y1="120" x2="180" y2="120" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ga)"/>
+
+  <rect x="182" y="80" width="200" height="80" rx="7" fill="#1c2333" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="282" y="102" text-anchor="middle" fill="#e3b341" font-size="11" font-weight="700">mem::graph-extract</text>
+  <text x="282" y="118" text-anchor="middle" fill="#8b949e" font-size="10">XML 프롬프트 → 외부 LLM API</text>
+  <text x="282" y="133" text-anchor="middle" fill="#8b949e" font-size="10">&lt;entities&gt; file|function|concept</text>
+  <text x="282" y="148" text-anchor="middle" fill="#8b949e" font-size="10">error|decision|pattern|library</text>
+
+  <line x1="383" y1="120" x2="422" y2="120" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ga)"/>
+
+  <rect x="424" y="80" width="200" height="80" rx="7" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="524" y="102" text-anchor="middle" fill="#d2a8ff" font-size="11" font-weight="700">노드/엣지 Upsert</text>
+  <text x="524" y="118" text-anchor="middle" fill="#8b949e" font-size="10">dedup: (name, type)</text>
+  <text x="524" y="133" text-anchor="middle" fill="#8b949e" font-size="10">엣지 weight 0-1 (기본 0.5)</text>
+  <text x="524" y="148" text-anchor="middle" fill="#8b949e" font-size="10">bitemporal: tcommit, tvalid</text>
+
+  <line x1="625" y1="120" x2="664" y2="120" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ga)"/>
+
+  <rect x="666" y="90" width="120" height="60" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="726" y="112" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">KV 저장</text>
+  <text x="726" y="128" text-anchor="middle" fill="#8b949e" font-size="10">mem:graph:nodes</text>
+  <text x="726" y="143" text-anchor="middle" fill="#8b949e" font-size="10">mem:graph:edges</text>
+
+  <!-- Edge types -->
+  <rect x="182" y="175" width="504" height="50" rx="6" fill="#0d1117" stroke="#30363d"/>
+  <text x="434" y="194" text-anchor="middle" fill="#8b949e" font-size="10">관계 타입: uses · imports · modifies · causes · fixes · depends_on · related_to</text>
+  <text x="434" y="212" text-anchor="middle" fill="#8b949e" font-size="10">노드 타입: file · function · concept · error · decision · pattern · library · person  (TS 타입은 추가로 project/preference/location/organization/event도 포함)</text>
+</svg>
+<p class="diagram-cap">graph.ts:93-178. 외부 LLM API가 각 관측을 읽고 개념 간 관계를 XML로 출력합니다.</p>
+</div>
+
+<h3>검색 융합 — RRF (Reciprocal Rank Fusion)</h3>
+<p>smart-search는 단순 가중 합산이 아니라 <strong>순위 기반 융합</strong>입니다. 각 스트림의 원점수가 아닌 순위를 사용합니다. <span class="ref">src/state/hybrid-search.ts</span></p>
+
+<div class="diagram">
+<svg width="820" height="300" viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ra" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8b949e"/></marker>
+  </defs>
+
+  <!-- BM25 stream -->
+  <rect x="10" y="30" width="200" height="60" rx="7" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="110" y="52" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">BM25 검색</text>
+  <text x="110" y="68" text-anchor="middle" fill="#8b949e" font-size="10">k1=1.2, b=0.75 · 동의어 확장</text>
+  <text x="110" y="83" text-anchor="middle" fill="#8b949e" font-size="10">접두사 매칭 · CJK 세그먼트</text>
+
+  <!-- Vector stream -->
+  <rect x="10" y="120" width="200" height="60" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="110" y="142" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">Vector 검색</text>
+  <text x="110" y="158" text-anchor="middle" fill="#8b949e" font-size="10">Xenova 384-dim 코사인 유사도</text>
+  <text x="110" y="173" text-anchor="middle" fill="#8b949e" font-size="10">brute-force top-k</text>
+
+  <!-- Graph stream -->
+  <rect x="10" y="210" width="200" height="60" rx="7" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="110" y="232" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="700">Graph Traversal</text>
+  <text x="110" y="248" text-anchor="middle" fill="#8b949e" font-size="10">Dijkstra (cost=1/weight)</text>
+  <text x="110" y="263" text-anchor="middle" fill="#8b949e" font-size="10">상위 vector 결과 1-hop 확장 포함</text>
+
+  <line x1="211" y1="60" x2="330" y2="150" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ra)"/>
+  <line x1="211" y1="150" x2="330" y2="155" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ra)"/>
+  <line x1="211" y1="240" x2="330" y2="160" stroke="#d2a8ff" stroke-width="1.5" marker-end="url(#ra)"/>
+
+  <!-- RRF box -->
+  <rect x="332" y="100" width="220" height="120" rx="8" fill="#1c2333" stroke="#e3b341" stroke-width="2"/>
+  <text x="442" y="122" text-anchor="middle" fill="#e3b341" font-size="12" font-weight="700">RRF 융합 (k=60)</text>
+  <text x="442" y="140" text-anchor="middle" fill="#8b949e" font-size="10">가중치 재정규화 (스트림 없으면 0)</text>
+  <text x="442" y="158" text-anchor="middle" fill="#e6edf3" font-size="11">score =</text>
+  <text x="442" y="174" text-anchor="middle" fill="#58a6ff" font-size="10">0.4 × 1/(60+bm25Rank)</text>
+  <text x="442" y="188" text-anchor="middle" fill="#3fb950" font-size="10">+ 0.6 × 1/(60+vecRank)</text>
+  <text x="442" y="202" text-anchor="middle" fill="#d2a8ff" font-size="10">+ 0.2 × 1/(60+graphRank)</text>
+
+  <line x1="553" y1="160" x2="600" y2="160" stroke="#e3b341" stroke-width="1.5" marker-end="url(#ra)"/>
+
+  <!-- Post-process -->
+  <rect x="602" y="110" width="200" height="100" rx="7" fill="#1c2333" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="702" y="132" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">후처리</text>
+  <text x="702" y="150" text-anchor="middle" fill="#8b949e" font-size="10">diversifyBySession</text>
+  <text x="702" y="165" text-anchor="middle" fill="#8b949e" font-size="10">(세션당 최대 3개)</text>
+  <text x="702" y="180" text-anchor="middle" fill="#8b949e" font-size="10">enrichResults (KV 로드)</text>
+  <text x="702" y="195" text-anchor="middle" fill="#8b949e" font-size="10">rerank (RERANK_ENABLED시)</text>
+
+  <!-- Note: graph weight -->
+  <rect x="10" y="285" width="800" height="12" rx="3" fill="none"/>
+  <text x="400" y="296" text-anchor="middle" fill="#8b949e" font-size="10">※ 현재 설정 GRAPH_WEIGHT 미설정 → 기본 0.3 적용. 세 스트림 모두 히트 시 재정규화: BM25=0.333, Vec=0.5, Graph=0.167</text>
+</svg>
+<p class="diagram-cap">hybrid-search.ts:77-240. 원점수가 아닌 순위(rank)를 융합하므로 스케일 차이에 강건합니다.</p>
+</div>
+
+<h3>Viewer — 그래프 시각화 (:3113)</h3>
+<ul>
+  <li>단일 <code>index.html</code> 자체완결 앱 (~197KB). <strong>외부 그래프 라이브러리 없음</strong> (d3/vis/cytoscape 미사용)</li>
+  <li>HTML5 <code>&lt;canvas&gt;</code> 2D 직접 구현 — 커스텀 힘 기반 시뮬레이션(<code>runSimulation()</code>): O(n²) Coulomb 척력 + Hooke 인력(목표거리 100) + 중심 중력, 감쇠 0.9</li>
+  <li>노드 shape-by-type: <code>file→rect, function/concept/pattern→circle, error/decision→diamond, library→hexagon</code></li>
+  <li>REST 프록시: 모든 요청은 3113→3111로 relay, bearer token은 서버측에서만 첨가 (브라우저에 secret 노출 없음)</li>
+  <li>실시간: WebSocket <code>stream/mem-live/viewer</code> 우선, 실패 시 HTTP 폴링 폴백</li>
+  <li>빈 그래프 → "Rebuild Graph" 버튼 → <code>POST graph/build</code> → <code>mem::graph-build</code> (전체 관측에서 재구성)</li>
+</ul>
+</section>
+
+
+<!-- ═══════════ 6. 저장 ═══════════ -->
+<section id="storage">
+<h2><span class="num">6</span>저장 (Storage)</h2>
+
+<p>agentmemory는 디스크에 직접 접근하지 않습니다. 모든 저장은 <strong>iii-sdk RPC</strong> (<code>state::get/set/update/delete/list</code>)로 iii-state 워커에 위임합니다. <span class="ref">src/state/kv.ts</span></p>
+
+<div class="diagram">
+<svg width="820" height="280" viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="stoa" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker></defs>
+
+  <!-- agentmemory -->
+  <rect x="10" y="110" width="160" height="60" rx="8" fill="#1c2333" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="90" y="134" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">agentmemory</text>
+  <text x="90" y="150" text-anchor="middle" fill="#8b949e" font-size="10">new StateKV(sdk)</text>
+  <text x="90" y="165" text-anchor="middle" fill="#8b949e" font-size="10">kv.set / kv.list …</text>
+
+  <line x1="171" y1="140" x2="210" y2="140" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#stoa)"/>
+  <text x="190" y="133" text-anchor="middle" fill="#8b949e" font-size="9">state::set</text>
+
+  <!-- iii-engine -->
+  <rect x="212" y="80" width="150" height="120" rx="8" fill="#1c2333" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="287" y="102" text-anchor="middle" fill="#d2a8ff" font-size="11" font-weight="700">iii-state 워커</text>
+  <text x="287" y="118" text-anchor="middle" fill="#8b949e" font-size="10">WS :49134 RPC</text>
+  <rect x="222" y="125" width="130" height="18" rx="3" fill="#0d1117"/>
+  <text x="287" y="138" text-anchor="middle" fill="#e6edf3" font-size="10">adapter: kv (file_based)</text>
+  <rect x="222" y="147" width="130" height="18" rx="3" fill="#0d1117"/>
+  <text x="287" y="160" text-anchor="middle" fill="#e6edf3" font-size="10">file_path: ./data/state_store.db</text>
+  <text x="287" y="185" text-anchor="middle" fill="#8b949e" font-size="10">파일당 1 KV entry</text>
+
+  <line x1="363" y1="140" x2="400" y2="140" stroke="#d2a8ff" stroke-width="1.5" marker-end="url(#stoa)"/>
+
+  <!-- state_store -->
+  <rect x="402" y="30" width="400" height="240" rx="8" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="602" y="52" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">state_store.db (KV, 진실의 원천)</text>
+
+  <rect x="412" y="62" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="73" text-anchor="middle" fill="#8b949e" font-size="10">mem:sessions  — Session 레코드</text>
+  <rect x="412" y="80" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="91" text-anchor="middle" fill="#8b949e" font-size="10">mem:obs:{sessionId}  — CompressedObservation[] (RawObs를 덮어씀)</text>
+  <rect x="412" y="98" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="109" text-anchor="middle" fill="#8b949e" font-size="10">mem:memories  — Memory (durable 학습 결과)</text>
+  <rect x="412" y="116" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="127" text-anchor="middle" fill="#8b949e" font-size="10">mem:summaries  — SessionSummary</text>
+  <rect x="412" y="134" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="145" text-anchor="middle" fill="#8b949e" font-size="10">mem:semantic  — SemanticMemory (Tier 1 통합 결과)</text>
+  <rect x="412" y="152" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="163" text-anchor="middle" fill="#8b949e" font-size="10">mem:procedural  — ProceduralMemory (Tier 3 결과)</text>
+  <rect x="412" y="170" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="181" text-anchor="middle" fill="#8b949e" font-size="10">mem:insights  — Insight (reflect 합성, 24h decay)</text>
+  <rect x="412" y="188" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="199" text-anchor="middle" fill="#8b949e" font-size="10">mem:lessons  — Lesson (JSONL import / slot-reflect 파생)</text>
+  <rect x="412" y="206" width="380" height="14" rx="3" fill="#0d1117"/>
+  <text x="602" y="217" text-anchor="middle" fill="#8b949e" font-size="10">mem:crystals  — Crystal (세션 파일/툴/레슨 묶음)</text>
+  <rect x="412" y="224" width="180" height="14" rx="3" fill="#0d1117"/>
+  <text x="502" y="235" text-anchor="middle" fill="#8b949e" font-size="10">mem:graph:nodes / :edges</text>
+  <rect x="600" y="224" width="192" height="14" rx="3" fill="#0d1117"/>
+  <text x="696" y="235" text-anchor="middle" fill="#e3b341" font-size="10">mem:index:bm25  — BM25+벡터 블롭 (5s debounce)</text>
+</svg>
+<p class="diagram-cap">stream_store(:3112)는 Viewer가 소비하는 파생/휘발성 라이브 테이프입니다 — 진실의 원천이 아님.</p>
+</div>
+
+<h3>인덱스 영속화 및 부팅 시 복구</h3>
+<ul>
+  <li>BM25 인덱스 + 384-dim 벡터 → <code>mem:index:bm25</code> 스코프에 직렬화 blob으로 저장, <strong>5초 디바운스</strong>로 쓰기 빈도 제어</li>
+  <li>부팅 시 dim guard: 로드된 벡터의 dimension ≠ 384이면 거부. <code>AGENTMEMORY_DROP_STALE_INDEX=true</code> 설정 시 강제 초기화 후 재색인</li>
+  <li>BM25 비어있으면 백그라운드에서 전체 <code>rebuildIndex(kv)</code> 실행 (배치 크기 32, <code>REBUILD_EMBED_BATCH_SIZE</code>)</li>
+  <li>벡터 임베딩은 <code>@xenova/transformers</code> lazy-load: 첫 임베딩 요청 시 모델 파일 다운로드 및 캐시</li>
+</ul>
+
+<div class="callout info">
+  <span class="icon">📐</span><strong>임베딩 독립성 —</strong> <code>EMBEDDING_PROVIDER=local</code>은 LLM 제공자 감지 경로와 <strong>완전히 별도</strong>입니다. <code>OPENAI_API_KEY</code>가 LLM으로 감지되어도 임베딩은 Xenova 로컬 모델을 강제 사용합니다. 이 값을 변경하면 384-dim 불일치로 dim guard가 발동하니 인덱스 초기화가 필요합니다.
+</div>
+</section>
+
+
+<!-- ═══════════ 7. 종합 ═══════════ -->
+<section id="summary">
+<h2><span class="num">7</span>내 설정 기준 전체 흐름 종합</h2>
+
+<p>위 모든 단계가 실제 세션에서 어떻게 연결되는지를 한 장으로 정리합니다.</p>
+
+<div class="diagram">
+<svg width="820" height="520" viewBox="0 0 820 520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ma" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/></marker>
+    <marker id="mb" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3fb950"/></marker>
+    <marker id="mc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#e3b341"/></marker>
+    <marker id="md" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#d2a8ff"/></marker>
+    <marker id="me" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f78166"/></marker>
+  </defs>
+
+  <!-- Phase 1: Session Start -->
+  <rect x="10" y="10" width="800" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="250" y="30" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">① 세션 시작 (SessionStart 훅)</text>
+  <text x="600" y="30" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">INJECT_CONTEXT=true → 과거 기억 recall → stdout 주입</text>
+  <text x="250" y="48" text-anchor="middle" fill="#8b949e" font-size="10">/session/start → Session KV 생성 · project, cwd 기록</text>
+  <text x="600" y="48" text-anchor="middle" fill="#8b949e" font-size="10">TOKEN_BUDGET=2000 내 Lesson + SessionSummary + 중요 관측 조합</text>
+
+  <line x1="410" y1="61" x2="410" y2="82" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ma)"/>
+
+  <!-- Phase 2: Tool calls -->
+  <rect x="10" y="84" width="800" height="60" rx="8" fill="#0d1117" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="200" y="104" text-anchor="middle" fill="#e3b341" font-size="11" font-weight="700">② 매 tool 호출 (PostToolUse 훅)</text>
+  <text x="600" y="104" text-anchor="middle" fill="#e3b341" font-size="11" font-weight="700">AUTO_COMPRESS=true → 외부 LLM API 1회 호출 (옵트인)</text>
+  <text x="200" y="120" text-anchor="middle" fill="#8b949e" font-size="10">/observe → dedup → privacy strip → 관측 상한(500) 체크</text>
+  <text x="600" y="120" text-anchor="middle" fill="#8b949e" font-size="10">XML &lt;observation&gt; 압축 → BM25 + 384d 벡터 인덱스 → stream_store 발행</text>
+  <text x="410" y="138" text-anchor="middle" fill="#8b949e" font-size="10">※ 합성 압축 대비: LLM이 facts[], concepts[], importance를 직접 채움 (confidence = quality score)</text>
+
+  <line x1="410" y1="145" x2="410" y2="166" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ma)"/>
+
+  <!-- Phase 3: Recall -->
+  <rect x="10" y="168" width="800" height="40" rx="8" fill="#0d1117" stroke="#3fb950" stroke-width="1"/>
+  <text x="200" y="184" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">③ 검색 (mem::smart-search)</text>
+  <text x="580" y="184" text-anchor="middle" fill="#3fb950" font-size="11">BM25(0.4) + Xenova벡터(0.6) + Graph(0.3→0.167) RRF 융합</text>
+  <text x="410" y="200" text-anchor="middle" fill="#8b949e" font-size="10">순위 기반 점수: 세션당 최대 3개 · graphContext breadcrumb 포함 · project 격리</text>
+
+  <line x1="410" y1="209" x2="410" y2="230" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ma)"/>
+
+  <!-- Phase 4: Stop -->
+  <rect x="10" y="232" width="800" height="80" rx="8" fill="#0d1117" stroke="#ffa657" stroke-width="2"/>
+  <text x="140" y="252" text-anchor="middle" fill="#ffa657" font-size="11" font-weight="700">④ 세션 종료 (Stop → SessionEnd 훅)</text>
+
+  <rect x="20" y="260" width="190" height="44" rx="5" fill="#1c2333" stroke="#30363d"/>
+  <text x="115" y="278" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="700">mem::summarize</text>
+  <text x="115" y="293" text-anchor="middle" fill="#8b949e" font-size="10">청크 map-reduce (400개/청크)</text>
+  <text x="115" y="305" text-anchor="middle" fill="#8b949e" font-size="10">→ KV: mem:summaries</text>
+
+  <rect x="220" y="260" width="175" height="44" rx="5" fill="#1c2333" stroke="#30363d"/>
+  <text x="307" y="278" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="700">mem::graph-extract</text>
+  <text x="307" y="293" text-anchor="middle" fill="#8b949e" font-size="10">전체 obs → XML → 외부 LLM</text>
+  <text x="307" y="305" text-anchor="middle" fill="#8b949e" font-size="10">→ mem:graph:nodes/edges</text>
+
+  <rect x="405" y="260" width="175" height="44" rx="5" fill="#1c2333" stroke="#30363d"/>
+  <text x="492" y="278" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="700">mem::slot-reflect</text>
+  <text x="492" y="293" text-anchor="middle" fill="#8b949e" font-size="10">REFLECT=true → 클러스터</text>
+  <text x="492" y="305" text-anchor="middle" fill="#8b949e" font-size="10">→ insight → mem:insights</text>
+
+  <rect x="590" y="260" width="210" height="44" rx="5" fill="#1c2333" stroke="#30363d"/>
+  <text x="695" y="278" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="700">mem::consolidate-pipeline</text>
+  <text x="695" y="293" text-anchor="middle" fill="#8b949e" font-size="10">CONSOLIDATION=true · force</text>
+  <text x="695" y="305" text-anchor="middle" fill="#8b949e" font-size="10">4-tier 전체 실행</text>
+
+  <line x1="410" y1="313" x2="410" y2="334" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ma)"/>
+
+  <!-- Phase 5: Consolidation detail -->
+  <rect x="10" y="336" width="800" height="80" rx="8" fill="#0d1117" stroke="#d2a8ff" stroke-width="1.5"/>
+  <text x="410" y="355" text-anchor="middle" fill="#d2a8ff" font-size="11" font-weight="700">⑤ 4-tier 통합 (세션종료 + 매 2시간)</text>
+
+  <rect x="20" y="362" width="185" height="46" rx="5" fill="#1c2333" stroke="#58a6ff"/>
+  <text x="112" y="379" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="700">[Tier 1] Semantic Merge</text>
+  <text x="112" y="394" text-anchor="middle" fill="#8b949e" font-size="10">요약 ≥5 → 외부 LLM → 공통 사실</text>
+  <text x="112" y="406" text-anchor="middle" fill="#8b949e" font-size="10">→ mem:semantic</text>
+
+  <rect x="213" y="362" width="185" height="46" rx="5" fill="#1c2333" stroke="#d2a8ff"/>
+  <text x="305" y="379" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">[Tier 2] Reflect</text>
+  <text x="305" y="394" text-anchor="middle" fill="#8b949e" font-size="10">그래프 클러스터 → insight</text>
+  <text x="305" y="406" text-anchor="middle" fill="#8b949e" font-size="10">→ mem:insights</text>
+
+  <rect x="406" y="362" width="185" height="46" rx="5" fill="#1c2333" stroke="#3fb950"/>
+  <text x="498" y="379" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="700">[Tier 3] Procedural</text>
+  <text x="498" y="394" text-anchor="middle" fill="#8b949e" font-size="10">pattern ≥2 → 절차 추출</text>
+  <text x="498" y="406" text-anchor="middle" fill="#8b949e" font-size="10">→ mem:procedural</text>
+
+  <rect x="599" y="362" width="203" height="46" rx="5" fill="#1c2333" stroke="#f78166"/>
+  <text x="700" y="379" text-anchor="middle" fill="#f78166" font-size="10" font-weight="700">[Tier 4] Decay</text>
+  <text x="700" y="394" text-anchor="middle" fill="#8b949e" font-size="10">30일마다 strength×0.9</text>
+  <text x="700" y="406" text-anchor="middle" fill="#8b949e" font-size="10">하한 0.1 (완전 소멸 없음)</text>
+
+  <line x1="410" y1="417" x2="410" y2="440" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ma)"/>
+
+  <!-- Final state -->
+  <rect x="10" y="442" width="800" height="68" rx="8" fill="#0d1117" stroke="#3fb950" stroke-width="2"/>
+  <text x="410" y="462" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">⑥ 영속 지식 베이스 (state_store.db)</text>
+  <text x="410" y="480" text-anchor="middle" fill="#8b949e" font-size="10">Sessions · Observations · Memories · Summaries · Semantic · Procedural · Insights · Lessons · Crystals</text>
+  <text x="410" y="497" text-anchor="middle" fill="#8b949e" font-size="10">Graph Nodes/Edges · BM25 Index · 384-dim Vector Index (5s debounce 영속화)</text>
+</svg>
+<p class="diagram-cap">전체 파이프라인 흐름. 회색 화살표는 단계 연결, 색상 박스는 LLM 경로(옵트인, provider 키 설정 시 활성화).</p>
+</div>
+
+<div class="callout success">
+  <span class="icon">✅</span><strong>요약 —</strong>
+  agentmemory가 제공하는 <strong>가장 완전한 학습 모드</strong>입니다. 매 tool 호출(외부 LLM 압축, 옵트인) → 세션 종료(요약·그래프·insight·4-tier 통합) → 2시간 주기 통합이 모두 활성화됩니다. 임베딩만 로컬(Xenova 384-dim)이므로 임베딩 미지원 이슈와 무관하게 하이브리드 벡터 검색이 동작합니다.
+</div>
+
+</section>
+
+
+<!-- ═══════════ 8. 데이터 수명주기 ═══════════ -->
+<section id="lifecycle">
+<h2><span class="num">8</span>데이터 수명주기 &amp; 소멸 경로</h2>
+
+<h3>Q. "매 세션이 종료되어야만 정상 동작하는가?"</h3>
+<p><strong>아닙니다.</strong> 라이브 관측은 세션 종료와 무관하게 훅 이벤트마다 즉시 영속됩니다. 세션 종료(Stop/SessionEnd)에서만 일어나는 것은 파생 데이터입니다.</p>
+
+<div class="diagram">
+<svg width="820" height="280" viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="lca" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3fb950"/></marker>
+    <marker id="lcb" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ffa657"/></marker>
+    <marker id="lcc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#d2a8ff"/></marker>
+  </defs>
+
+  <!-- Live (instant) -->
+  <rect x="10" y="20" width="260" height="100" rx="8" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="140" y="42" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">즉시 영속 (세션 종료 무관)</text>
+  <text x="140" y="60" text-anchor="middle" fill="#8b949e" font-size="10">observe.ts:154,235</text>
+  <rect x="20" y="68" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="140" y="80" text-anchor="middle" fill="#e6edf3" font-size="10">RawObservation → KV 저장</text>
+  <rect x="20" y="88" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="140" y="100" text-anchor="middle" fill="#e6edf3" font-size="10">합성/LLM 압축 → BM25 인덱싱</text>
+  <rect x="20" y="108" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="140" y="120" text-anchor="middle" fill="#e6edf3" font-size="10">384-dim 벡터 인덱싱 + stream_store 발행</text>
+
+  <!-- Session end -->
+  <rect x="290" y="20" width="260" height="130" rx="8" fill="#1c2333" stroke="#ffa657" stroke-width="2"/>
+  <text x="420" y="42" text-anchor="middle" fill="#ffa657" font-size="12" font-weight="700">세션 종료 시에만 (파생 데이터)</text>
+  <text x="420" y="58" text-anchor="middle" fill="#8b949e" font-size="10">events.ts:47-76, session-end.ts</text>
+  <rect x="300" y="66" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="420" y="78" text-anchor="middle" fill="#e6edf3" font-size="10">mem::summarize → SessionSummary</text>
+  <rect x="300" y="86" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="420" y="98" text-anchor="middle" fill="#e6edf3" font-size="10">mem::graph-extract → 노드/엣지</text>
+  <rect x="300" y="106" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="420" y="118" text-anchor="middle" fill="#e6edf3" font-size="10">mem::slot-reflect → lesson/insight</text>
+  <rect x="300" y="126" width="240" height="16" rx="3" fill="#0d1117"/>
+  <text x="420" y="138" text-anchor="middle" fill="#e6edf3" font-size="10">mem::consolidate-pipeline (force)</text>
+
+  <!-- Background intervals -->
+  <rect x="570" y="20" width="240" height="100" rx="8" fill="#1c2333" stroke="#d2a8ff" stroke-width="2"/>
+  <text x="690" y="42" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="700">백그라운드 자동 타이머</text>
+  <text x="690" y="58" text-anchor="middle" fill="#8b949e" font-size="10">index.ts:499-539</text>
+  <rect x="580" y="66" width="220" height="16" rx="3" fill="#0d1117"/>
+  <text x="690" y="78" text-anchor="middle" fill="#f78166" font-size="10">auto-forget 1시간 (유일한 자동 삭제)</text>
+  <rect x="580" y="86" width="220" height="16" rx="3" fill="#0d1117"/>
+  <text x="690" y="98" text-anchor="middle" fill="#e6edf3" font-size="10">consolidation 2시간 (CONSOLIDATION ON)</text>
+  <rect x="580" y="106" width="220" height="16" rx="3" fill="#0d1117"/>
+  <text x="690" y="118" text-anchor="middle" fill="#e6edf3" font-size="10">lesson/insight decay 24시간</text>
+
+  <!-- Crash row -->
+  <rect x="10" y="180" width="800" height="90" rx="8" fill="#0d1117" stroke="#30363d"/>
+  <text x="400" y="200" text-anchor="middle" fill="#e3b341" font-size="12" font-weight="700">크래시(강제종료) 시나리오</text>
+
+  <rect x="20" y="208" width="370" height="56" rx="5" fill="#1c2333" stroke="#3fb950"/>
+  <text x="205" y="226" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">보존되는 것 (안전)</text>
+  <text x="205" y="242" text-anchor="middle" fill="#8b949e" font-size="10">모든 RawObservation · 압축 관측 (KV 영속)</text>
+  <text x="205" y="257" text-anchor="middle" fill="#8b949e" font-size="10">BM25/벡터 인덱스 → rebuildIndex()로 자동 복원</text>
+
+  <rect x="410" y="208" width="390" height="56" rx="5" fill="#1c2333" stroke="#f78166"/>
+  <text x="605" y="226" text-anchor="middle" fill="#f78166" font-size="11" font-weight="700">유실되는 것</text>
+  <text x="605" y="242" text-anchor="middle" fill="#8b949e" font-size="10">SessionSummary · Graph 노드/엣지 · lesson/insight · Crystal</text>
+  <text x="605" y="257" text-anchor="middle" fill="#8b949e" font-size="10">세션 상태가 "active"로 잔류 (자동 stale-session reaper 없음)</text>
+</svg>
+<p class="diagram-cap">인덱스 손실은 rebuildIndex()로 자동 복구됩니다. 요약·그래프·교훈은 재생성 불가.</p>
+</div>
+
+<div class="callout warn">
+  <span class="icon">⚠</span><strong>오해 정정 — MAX_SESSIONS / MAX_MEMORIES 등 6개 상수</strong>
+  <br>이 상수들은 <code>src/functions/export-import.ts:187-192</code>에 정의된 <strong>import 검증 상한</strong>입니다. 주기적 eviction(삭제)과 전혀 무관합니다. import 데이터가 이 값을 초과하면 삭제가 아니라 <strong>import 자체를 거부</strong>하고 에러를 반환합니다.<br><br>
+  또한 동일한 이름 <code>MAX_OBS_PER_SESSION</code>이 두 곳에 별도 존재합니다:
+  <ul>
+    <li>import 검증: <code>export-import.ts:190</code> 하드코딩 <strong>5,000</strong></li>
+    <li>런타임 쓰기 한도: env <code>MAX_OBS_PER_SESSION</code> 기본 <strong>500</strong> (<code>config.ts:145</code>) — observe 시 쓰기를 차단, 기존 데이터는 삭제하지 않음</li>
+  </ul>
+</div>
+
+<h3>실제 데이터 소멸 경로 5가지</h3>
+<table>
+  <tr><th>경로</th><th>함수</th><th>트리거</th><th>대상 기준</th><th>결과</th></tr>
+  <tr><td><strong>자동 forget</strong></td><td><code>mem::auto-forget</code></td><td><span class="on">1시간 자동</span> (유일한 자동 삭제)</td><td>① TTL 만료 메모리<br>② 모순 메모리(Jaccard &gt; 0.9) → soft-retire<br>③ 180일 초과 + importance≤2 관측</td><td>삭제 또는 isLatest=false</td></tr>
+  <tr><td>수동 evict</td><td><code>mem::evict</code></td><td><span class="off">API 수동 호출만</span></td><td>30일 + 요약 없는 세션 / 90일 + imp&lt;3 관측 / 프로젝트 10k 초과(imp 최저 순) / TTL·구버전 메모리</td><td>영구 삭제</td></tr>
+  <tr><td>retention evict</td><td><code>mem::retention-evict</code></td><td><span class="off">API 수동 호출만</span></td><td>retention score &lt; threshold, 최저 점수 순 최대 50개</td><td>영구 삭제</td></tr>
+  <tr><td>strength decay</td><td><code>consolidate-pipeline</code></td><td>2시간 자동 (CONSOLIDATION ON)</td><td>30일 비활성 → strength × 0.9</td><td><strong>약화만</strong> (하한 0.1, 삭제 없음)</td></tr>
+  <tr><td>import 검증</td><td><code>mem::import</code></td><td>import 요청 시 1회</td><td>6개 상한 초과</td><td>import 거부 (기존 데이터 무변화)</td></tr>
+</table>
+
+<div class="callout info">
+  <span class="icon">💡</span><strong>권장사항 —</strong>
+  <ul>
+    <li>세션 요약·그래프·교훈을 보장하려면 <strong>Stop 훅이 정상 실행되도록</strong> 환경을 유지하세요. IDE/터미널 강제종료 대신 <code>/stop</code> 등으로 정상 종료.</li>
+    <li><code>SNAPSHOT_ENABLED=true</code> + <code>SNAPSHOT_INTERVAL=3600</code>을 설정하면 스냅샷 엔드포인트(<code>POST /agentmemory/snapshot-create</code>)를 주기적으로 외부에서 호출해 state_store.db를 백업할 수 있습니다. (단, 코드 내 자동 setInterval은 없어 외부 cron 또는 별도 스크립트가 필요.)</li>
+    <li><code>AUTO_FORGET_INTERVAL_MS</code>로 1시간 자동 삭제 주기를 조절하거나, <code>AUTO_FORGET_ENABLED=false</code>로 끌 수 있습니다. 끄면 데이터 무한 누적에 주의.</li>
+    <li>중요한 세션이 크래시로 유실됐다면 <code>POST /agentmemory/replay/import-jsonl</code>로 <code>~/.claude/projects</code>의 JSONL을 재임포트해 관측·Crystal·Lesson을 복원할 수 있습니다 (요약은 재생성).</li>
+  </ul>
+</div>
+</section>
+
+
+<!-- ═══════════ 9. Secret ═══════════ -->
+<section id="secrets">
+<h2><span class="num">9</span>개인정보·Secret 처리</h2>
+
+<p>모든 observe 데이터는 KV 저장 전 <code>stripPrivateData()</code>를 통과합니다. <span class="ref">src/functions/privacy.ts</span> <span class="ref">src/functions/observe.ts:79-86</span></p>
+
+<h3>인식되는 패턴 (14개 하드코딩 정규식)</h3>
+<table>
+  <tr><th>패턴</th><th>대상</th><th>치환 결과</th></tr>
+  <tr><td><code>api[_-]?key|secret|token|password|credential|auth</code> = 값 (20자+)</td><td>범용 자격증명 키=값 형태</td><td rowspan="14" style="vertical-align:middle; text-align:center; color:var(--accent3); font-weight:700">[REDACTED_SECRET]</td></tr>
+  <tr><td><code>Bearer &lt;20자+&gt;</code></td><td>HTTP Bearer 토큰</td></tr>
+  <tr><td><code>sk-proj-...</code></td><td>OpenAI 프로젝트 키</td></tr>
+  <tr><td><code>sk/pk/rk/ak-[20자+]</code></td><td>범용 sk/pk 접두사 키</td></tr>
+  <tr><td><code>sk-ant-...</code></td><td>Anthropic API 키</td></tr>
+  <tr><td><code>ghp_/ghs_/ghu_[36자+]</code></td><td>GitHub Personal Access Token</td></tr>
+  <tr><td><code>github_pat_...</code></td><td>GitHub fine-grained PAT</td></tr>
+  <tr><td><code>xoxb-...</code></td><td>Slack 봇 토큰</td></tr>
+  <tr><td><code>AKIA[16자]</code></td><td>AWS Access Key ID</td></tr>
+  <tr><td><code>AIza[35자]</code></td><td>Google API Key</td></tr>
+  <tr><td><code>eyJ...eyJ...eyJ...</code> (JWT 3분절)</td><td>JSON Web Token</td></tr>
+  <tr><td><code>npm_[36자]</code></td><td>npm 게시 토큰</td></tr>
+  <tr><td><code>glpat-...</code></td><td>GitLab Personal Access Token</td></tr>
+  <tr><td><code>dop_v1_[64자]</code></td><td>DigitalOcean 토큰</td></tr>
+  <tr><td><code>&lt;private&gt;...&lt;/private&gt;</code></td><td>수동 태그 영역 (패턴 무관)</td><td style="color:var(--accent3); font-weight:700">[REDACTED]</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="icon">⚠</span><strong>패턴 한계 — 미매칭 PII는 그대로 저장됨</strong>
+  <br>다음 정보는 현재 패턴에 포함되지 않아 <strong>마스킹 없이 그대로 저장</strong>됩니다:
+  <ul>
+    <li>주민등록번호, 이메일, 전화번호, 주소 등 개인 식별 정보</li>
+    <li>20자 미만의 짧은 비밀번호 / 짧은 키 (<code>api_key=short</code>는 통과, 테스트 확인)</li>
+    <li>사용자 정의 내부 토큰 (패턴에 없는 접두사)</li>
+  </ul>
+  <strong>사용자 확장 방법이 없습니다</strong> — <code>SECRET_PATTERN_SOURCES</code>는 소스 하드코딩이며 env로 패턴 추가 불가. 소스를 수정해 재빌드해야만 패턴을 추가할 수 있습니다.
+</div>
+
+<div class="callout info">
+  <span class="icon">💡</span><strong>권장사항 —</strong>
+  <ul>
+    <li>민감 데이터가 포함된 tool 입력/출력(파일 내용, DB 덤프 등)은 Claude에 직접 노출하지 않거나, 아래처럼 <code>&lt;private&gt;</code> 태그로 명시적으로 감쌀 것:</li>
+  </ul>
+  <code style="display:block;background:var(--bg3);padding:8px;border-radius:4px;margin-top:8px">민감하지 않은 내용 &lt;private&gt;주민번호: 900101-1234567&lt;/private&gt; 나머지 내용</code>
+  <ul style="margin-top:8px">
+    <li>DB 연결 문자열, 내부 시스템 토큰 등 조직 특화 패턴이 있다면 <strong>소스 수정(<code>src/functions/privacy.ts:5-20</code>) 후 재빌드</strong>가 유일한 방법입니다. Fork해서 관리하거나, 민감 작업은 별도 세션에서 격리 운영을 검토하세요.</li>
+    <li><code>AGENTMEMORY_SECRET</code>를 설정해 REST API에 Bearer 인증을 추가하면, <strong>저장된 데이터에 대한 외부 접근</strong>을 차단할 수 있습니다 (기본: loopback에서 무인증 오픈).</li>
+  </ul>
+</div>
+</section>
+
+
+<!-- ═══════════ 10. Recall Quality ═══════════ -->
+<section id="recall-quality">
+<h2><span class="num">10</span>검색 품질 (Recall Quality)</h2>
+
+<h3>context 주입 우선순위 &amp; importance 게이트</h3>
+<p>세션 시작 시 주입되는 컨텍스트는 아래 순서로 블록을 조립 후 <strong>최신순 정렬 → 토큰 버짓 2000 그리디 컷</strong>으로 최종 선택됩니다. <span class="ref">src/functions/context.ts:38-215</span></p>
+
+<table>
+  <tr><th>우선순위</th><th>블록 종류</th><th>품질 필터</th><th>상한</th></tr>
+  <tr><td><strong>1</strong></td><td>Pinned slots (고정 메모리)</td><td>없음 (항상 포함)</td><td>—</td></tr>
+  <tr><td><strong>2</strong></td><td>Project profile (개념/파일/컨벤션/공통 에러)</td><td>없음</td><td>—</td></tr>
+  <tr><td><strong>3</strong></td><td>Lessons (confidence 가중, project 매칭 시 ×1.5)</td><td>confidence 높을수록 우선</td><td>상위 10건</td></tr>
+  <tr><td><strong>4</strong></td><td>Session summaries (같은 project의 과거 세션)</td><td>없음</td><td>상위 10건</td></tr>
+  <tr><td><strong>5</strong></td><td>Observations (요약 없는 세션만)</td><td><span class="on">importance ≥ 5 강제 필터</span> → importance 내림차순</td><td>상위 5건</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="icon">⚠</span><strong>smart-search에는 importance 필터 없음</strong>
+  <br><code>mem::smart-search</code>와 <code>mem::search</code>의 하이브리드 검색에는 importance 임계값 필터가 적용되지 않습니다. 모든 인덱싱된 관측이 BM25/벡터/그래프 점수로 경쟁합니다. <strong>저품질 관측 오염 방어는 context 주입 단계에서만 강하게 작동</strong>하고, 직접 검색 결과에는 약합니다.
+</div>
+
+<h3>검색 품질 보장 장치 요약</h3>
+<table>
+  <tr><th>장치</th><th>적용 위치</th><th>효과</th></tr>
+  <tr><td>RRF 융합 (k=60)</td><td>smart-search</td><td>3개 스트림 순위 기반 결합 — 단일 스트림 점수 왜곡 완화</td></tr>
+  <tr><td>세션 다양성 상한 (maxPerSession=3)</td><td>smart-search</td><td>한 세션이 결과를 독점하는 것을 방지, 다른 세션 백필</td></tr>
+  <tr><td>importance≥5 필터</td><td>context 주입만</td><td>저중요도 관측이 컨텍스트 오염하는 것 방지</td></tr>
+  <tr><td>cross-encoder rerank</td><td>smart-search (옵션)</td><td>RERANK_ENABLED=true 시 상위 20건을 ms-marco-MiniLM-L-6-v2로 재정렬 → 정밀도↑, 지연↑</td></tr>
+  <tr><td>쿼리 확장 (searchWithExpansion)</td><td>smart-search</td><td>reformulation/temporal/entity 확장 병렬 검색 → 재현율↑</td></tr>
+  <tr><td>동의어 확장 (weight 0.7)</td><td>BM25 단계</td><td>동의어 표현의 렉시컬 매칭 보완</td></tr>
+  <tr><td>graphContext</td><td>graph 스트림</td><td>검색 결과에 개념 breadcrumb 추가 — 이유 설명 가능</td></tr>
+</table>
+
+<h3>eval 지표 (검색 품질 측정)</h3>
+<p>eval/ 디렉토리가 실제 품질을 측정합니다. <span class="ref">eval/runner/score.ts:13-32</span></p>
+<ul>
+  <li><strong>precision@k</strong>: 상위 k개 결과 중 정답 비율</li>
+  <li><strong>recall@k</strong>: 정답이 상위 k개 안에 포함될 확률</li>
+  <li><strong>hit@k</strong>: 정답 세션 ID가 상위 k개 세션 중 하나인지</li>
+  <li><strong>topGoldRank</strong>: 첫 번째 골드 세션의 랭크 (낮을수록 좋음)</li>
+  <li>비교 어댑터: agentmemory 하이브리드 vs grep-only vs 벡터-only</li>
+</ul>
+
+<div class="callout info">
+  <span class="icon">💡</span><strong>권장사항 —</strong>
+  <ul>
+    <li>검색 품질이 떨어진다고 느껴지면 <code>RERANK_ENABLED=true</code>를 시도하세요. 로컬 Xenova reranker(ms-marco-MiniLM-L-6-v2)가 추가로 돌므로 지연은 증가하지만 정밀도가 올라갑니다.</li>
+    <li>세션 요약이 충분히 쌓인 상태(≥5)에서 consolidation Tier 1(semantic merge)이 실행되면 <code>mem:semantic</code>에 공통 사실이 쌓여 context 품질이 눈에 띄게 향상됩니다.</li>
+    <li>importance가 낮은 관측이 검색 결과를 오염한다고 느끼면 현재 코드 구조상 <strong>observe 시 importance를 높이거나 (LLM 압축 품질 향상), 수동으로 <code>mem::evict</code>의 lowImportanceThreshold를 올려 저중요도 관측을 정리</strong>하는 것이 현실적인 대안입니다.</li>
+  </ul>
+</div>
+</section>
+
+
+<!-- ═══════════ 11. 튜닝 ═══════════ -->
+<section id="tuning">
+<h2><span class="num">11</span>설정 튜닝 가이드</h2>
+
+<h3>검색 가중치 (BM25 / VECTOR / GRAPH) — "올리면 뭐가 바뀌나"</h3>
+<div class="callout info">
+  <span class="icon">📐</span><strong>핵심 원리 —</strong> 가중치는 <strong>절대값이 아니라 참여 스트림 간 비율</strong>로 작동합니다. 스트림(BM25/vector/graph)이 빈 경우 해당 가중치를 0으로 만들고 나머지를 합이 1이 되도록 재정규화합니다(<code>hybrid-search.ts:197-206</code>). 따라서 BM25=0.4/VECTOR=0.6을 각각 2배로 올려도 결과는 동일합니다.
+</div>
+
+<div class="diagram">
+<svg width="820" height="200" viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- BM25 -->
+  <rect x="10" y="20" width="255" height="160" rx="8" fill="#1c2333" stroke="#58a6ff" stroke-width="2"/>
+  <text x="137" y="44" text-anchor="middle" fill="#58a6ff" font-size="13" font-weight="700">BM25_WEIGHT ↑</text>
+  <text x="137" y="62" text-anchor="middle" fill="#8b949e" font-size="10">기본값 0.4</text>
+  <rect x="20" y="72" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="137" y="83" text-anchor="middle" fill="#e6edf3" font-size="10">키워드/식별자 정확 매칭 강화</text>
+  <rect x="20" y="90" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="137" y="101" text-anchor="middle" fill="#e6edf3" font-size="10">에러 메시지 · 함수명 · 파일 경로 검색에 유리</text>
+  <rect x="20" y="108" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="137" y="119" text-anchor="middle" fill="#8b949e" font-size="10">✦ 동의어 확장(weight 0.7) + 접두사 매칭 포함</text>
+  <rect x="20" y="126" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="137" y="137" text-anchor="middle" fill="#8b949e" font-size="10">✦ 의미적/패러프레이즈 표현은 약해짐</text>
+  <text x="137" y="165" text-anchor="middle" fill="#e3b341" font-size="10">추천: 코드 식별자 중심 검색 환경 → 0.5-0.6</text>
+  <text x="137" y="178" text-anchor="middle" fill="#8b949e" font-size="10">임베딩 없을 시 자동 1.0으로 재정규화</text>
+
+  <!-- VECTOR -->
+  <rect x="283" y="20" width="255" height="160" rx="8" fill="#1c2333" stroke="#3fb950" stroke-width="2"/>
+  <text x="410" y="44" text-anchor="middle" fill="#3fb950" font-size="13" font-weight="700">VECTOR_WEIGHT ↑</text>
+  <text x="410" y="62" text-anchor="middle" fill="#8b949e" font-size="10">기본값 0.6</text>
+  <rect x="293" y="72" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="410" y="83" text-anchor="middle" fill="#e6edf3" font-size="10">의미적/패러프레이즈 유사도 강화</text>
+  <rect x="293" y="90" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="410" y="101" text-anchor="middle" fill="#e6edf3" font-size="10">"비슷한 개념 다른 표현"으로 검색 시 유리</text>
+  <rect x="293" y="108" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="410" y="119" text-anchor="middle" fill="#8b949e" font-size="10">✦ 로컬 Xenova 384-dim — 임베딩 없으면 0</text>
+  <rect x="293" y="126" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="410" y="137" text-anchor="middle" fill="#8b949e" font-size="10">✦ 벡터 인덱스 비어있으면 스트림 비활성</text>
+  <text x="410" y="165" text-anchor="middle" fill="#e3b341" font-size="10">추천: 현재 기본값(0.6)이 대부분 상황에 적합</text>
+  <text x="410" y="178" text-anchor="middle" fill="#8b949e" font-size="10">EMBEDDING_PROVIDER=local 확인 필수</text>
+
+  <!-- GRAPH -->
+  <rect x="556" y="20" width="255" height="160" rx="8" fill="#1c2333" stroke="#d2a8ff" stroke-width="2"/>
+  <text x="683" y="44" text-anchor="middle" fill="#d2a8ff" font-size="13" font-weight="700">GRAPH_WEIGHT ↑</text>
+  <text x="683" y="62" text-anchor="middle" fill="#8b949e" font-size="10">기본값 0.3 (미설정 시)</text>
+  <rect x="566" y="72" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="683" y="83" text-anchor="middle" fill="#e6edf3" font-size="10">관계형 멀티홉 검색 결과 비중 증가</text>
+  <rect x="566" y="90" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="683" y="101" text-anchor="middle" fill="#e6edf3" font-size="10">"X 관련 파일들의 연관 세션" 검색에 유리</text>
+  <rect x="566" y="108" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="683" y="119" text-anchor="middle" fill="#8b949e" font-size="10">✦ GRAPH_EXTRACTION ON + 그래프 충분히 채워져야</text>
+  <rect x="566" y="126" width="235" height="14" rx="3" fill="#0d1117"/>
+  <text x="683" y="137" text-anchor="middle" fill="#8b949e" font-size="10">✦ 쿼리에서 엔티티 추출 실패 시 스트림 비활성</text>
+  <text x="683" y="165" text-anchor="middle" fill="#e3b341" font-size="10">추천: 그래프 충분히 쌓인 후 0.3→0.4 시도</text>
+  <text x="683" y="178" text-anchor="middle" fill="#8b949e" font-size="10">그래프 없으면 올려도 효과 없음</text>
+</svg>
+<p class="diagram-cap">가중치는 재정규화되므로 비율만 의미 있음. BM25:VECTOR = 0.4:0.6 = 2:3 (동일 효과).</p>
+</div>
+
+<h3>주요 튜닝 가능 설정</h3>
+<table>
+  <tr><th>env 변수</th><th>기본값</th><th>범위/타입</th><th>효과</th></tr>
+  <tr><td><code>BM25_WEIGHT</code></td><td>0.4</td><td>0~1</td><td>렉시컬 검색 비중 (재정규화 적용)</td></tr>
+  <tr><td><code>VECTOR_WEIGHT</code></td><td>0.6</td><td>0~1</td><td>시맨틱 검색 비중</td></tr>
+  <tr><td><code>AGENTMEMORY_GRAPH_WEIGHT</code></td><td>0.3</td><td>0~1</td><td>그래프 traversal 보너스</td></tr>
+  <tr><td><code>RERANK_ENABLED</code></td><td>false</td><td>true/false</td><td>true: Xenova cross-encoder 재정렬 (정밀도↑ 지연↑)</td></tr>
+  <tr><td><code>TOKEN_BUDGET</code></td><td>2000</td><td>정수</td><td>context 주입 최대 토큰 수. 높이면 더 많은 블록 주입.</td></tr>
+  <tr><td><code>MAX_OBS_PER_SESSION</code></td><td>500</td><td>정수</td><td>세션당 observe 쓰기 상한. 높이면 더 많은 관측 저장.</td></tr>
+  <tr><td><code>AUTO_COMPRESS</code></td><td>false</td><td>true/false</td><td>true: LLM으로 고품질 facts/concepts 추출. 비용↑.</td></tr>
+  <tr><td><code>AUTO_FORGET_INTERVAL_MS</code></td><td>3600000 (1h)</td><td>ms</td><td>자동 삭제 주기. 길게 설정하면 오래된 관측 누적.</td></tr>
+  <tr><td><code>CONSOLIDATION_INTERVAL_MS</code></td><td>7200000 (2h)</td><td>ms</td><td>4-tier 통합 주기.</td></tr>
+  <tr><td><code>CONSOLIDATION_DECAY_DAYS</code></td><td>30</td><td>일</td><td>strength 감쇠 주기. 줄이면 빠른 소멸. ≤0이면 decay 비활성.</td></tr>
+  <tr><td><code>SUMMARIZE_CHUNK_SIZE</code></td><td>400</td><td>정수(관측 수)</td><td>요약 청크 크기. 크면 LLM 컨텍스트 윈도우 주의.</td></tr>
+  <tr><td><code>SUMMARIZE_CHUNK_CONCURRENCY</code></td><td>6</td><td>정수</td><td>병렬 청크 요약 수. LiteLLM 동시 요청 제한 고려.</td></tr>
+  <tr><td><code>GRAPH_EXTRACTION_BATCH_SIZE</code></td><td>10</td><td>정수</td><td>그래프 추출 배치 크기 (import 경로에서 사용).</td></tr>
+  <tr><td><code>EMBEDDING_PROVIDER</code></td><td>auto-detect</td><td>local/openai/voyage/cohere/gemini</td><td>local: Xenova 384-dim. 변경 시 dim guard 주의.</td></tr>
+</table>
+</section>
+
+
+<!-- ═══════════ 12. .env 레퍼런스 ═══════════ -->
+<section id="env-ref">
+<h2><span class="num">12</span>.env 전체 레퍼런스</h2>
+
+<p>설정 파일 우선순위: 프로젝트 루트 <code>.env</code> &gt; <code>~/.agentmemory/.env</code>. 읽기 순서는 <code>src/config.ts</code>의 <code>getMergedEnv()</code> 참조.</p>
+
+<h3>LLM 제공자</h3>
+<table>
+  <tr><th>env</th><th>예시 값</th><th>설명</th></tr>
+  <tr><td><code>OPENAI_API_KEY</code></td><td><code>sk-...</code></td><td>OpenAI 호환 키. 감지 우선순위 1위. <strong>chat completion도 지원</strong> (comment의 "embedding-only"는 stale).</td></tr>
+  <tr><td><code>OPENAI_BASE_URL</code></td><td><code>https://litellm-playground.nhncorp.com</code></td><td>OpenAI 호환 엔드포인트. Azure 도메인이 아닌 경우 <code>/v1/chat/completions</code> URL 사용.</td></tr>
+  <tr><td><code>OPENAI_MODEL</code></td><td><code>Qwen/Qwen3.5-397B-A17B-FP8</code></td><td>기본 <code>gpt-4o-mini</code>. 모델명이 request body의 <code>model</code> 필드에 그대로 들어감. LiteLLM이 인식해야 함.</td></tr>
+  <tr><td><code>OPENAI_API_KEY_FOR_LLM</code></td><td><code>false</code></td><td><code>false</code>로 설정 시 OPENAI_API_KEY를 LLM 용도로 사용하지 않음 (임베딩 전용으로 격리 가능).</td></tr>
+  <tr><td><code>ANTHROPIC_API_KEY</code></td><td><code>sk-ant-...</code></td><td>OPENAI 없을 때 우선. <code>ANTHROPIC_MODEL</code>로 모델 지정.</td></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td></td><td><code>GOOGLE_API_KEY</code> 별칭. <code>GEMINI_MODEL</code> 기본 <code>gemini-2.5-flash</code>.</td></tr>
+  <tr><td><code>OPENROUTER_API_KEY</code></td><td></td><td><code>OPENROUTER_MODEL</code>로 모델 지정.</td></tr>
+  <tr><td><code>MINIMAX_API_KEY</code></td><td></td><td>감지 우선순위 2위 (OPENAI 다음).</td></tr>
+  <tr><td><code>FALLBACK_PROVIDERS</code></td><td><code>anthropic,gemini</code></td><td>주 제공자 오류(rate limit 등) 시 순서대로 fallback.</td></tr>
+  <tr><td><code>MAX_TOKENS</code></td><td><code>4096</code></td><td>LLM 호출당 최대 출력 토큰.</td></tr>
+  <tr><td><code>AGENTMEMORY_LLM_TIMEOUT_MS</code></td><td><code>60000</code></td><td>LLM 호출 타임아웃(ms).</td></tr>
+  <tr><td><code>AGENTMEMORY_ALLOW_AGENT_SDK</code></td><td><code>false</code></td><td>Claude subscription SDK 폴백. Claude Code 내에서는 Stop-hook 재귀 위험 — 기본 off.</td></tr>
+</table>
+
+<h3>임베딩 제공자</h3>
+<table>
+  <tr><th>env</th><th>예시 값</th><th>설명</th></tr>
+  <tr><td><code>EMBEDDING_PROVIDER</code></td><td><code>local</code></td><td>강제 지정. local/openai/voyage/cohere/gemini/openrouter. 미설정 시 LLM 키 기반 자동 감지.</td></tr>
+  <tr><td><code>VOYAGE_API_KEY</code></td><td></td><td>코드 임베딩 최적화. <code>OPENAI_API_KEY</code> 없을 때 자동 감지.</td></tr>
+  <tr><td><code>OPENAI_EMBEDDING_MODEL</code></td><td><code>text-embedding-3-small</code></td><td>EMBEDDING_PROVIDER=openai 시 사용.</td></tr>
+  <tr><td><code>OPENAI_EMBEDDING_DIMENSIONS</code></td><td></td><td>known-models 표에 없는 모델 사용 시 필수. dim guard와 일치해야 함.</td></tr>
+</table>
+
+<h3>검색 튜닝</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>설명</th></tr>
+  <tr><td><code>BM25_WEIGHT</code></td><td>0.4</td><td>렉시컬 검색 비중 (재정규화 적용).</td></tr>
+  <tr><td><code>VECTOR_WEIGHT</code></td><td>0.6</td><td>시맨틱 검색 비중.</td></tr>
+  <tr><td><code>AGENTMEMORY_GRAPH_WEIGHT</code></td><td>0.3</td><td>그래프 traversal 보너스. 그래프가 없으면 0으로 처리.</td></tr>
+  <tr><td><code>TOKEN_BUDGET</code></td><td>2000</td><td>context 주입 토큰 상한.</td></tr>
+  <tr><td><code>MAX_OBS_PER_SESSION</code></td><td>500</td><td>세션당 라이브 관측 쓰기 상한 (import 검증의 5000과 별개).</td></tr>
+  <tr><td><code>RERANK_ENABLED</code></td><td>false</td><td>cross-encoder 재정렬 활성화.</td></tr>
+  <tr><td><code>AGENTMEMORY_DROP_STALE_INDEX</code></td><td>false</td><td>부팅 시 dim 불일치 인덱스 강제 초기화. 임베딩 프로바이더 변경 후 필요.</td></tr>
+</table>
+
+<h3>동작 플래그</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>내 설정</th><th>설명</th></tr>
+  <tr><td><code>AGENTMEMORY_AUTO_COMPRESS</code></td><td>false</td><td class="on">true</td><td>매 관측마다 LLM 압축. 비용↑ 품질↑.</td></tr>
+  <tr><td><code>CONSOLIDATION_ENABLED</code></td><td>false</td><td class="on">true</td><td>4-tier 통합 파이프라인 + 2시간 interval 활성.</td></tr>
+  <tr><td><code>GRAPH_EXTRACTION_ENABLED</code></td><td>false</td><td class="on">true</td><td>세션 종료 시 지식 그래프 추출.</td></tr>
+  <tr><td><code>AGENTMEMORY_INJECT_CONTEXT</code></td><td>false</td><td class="on">true</td><td>세션 시작 시 과거 기억을 stdout으로 주입.</td></tr>
+  <tr><td><code>AGENTMEMORY_REFLECT</code></td><td>false</td><td class="on">true</td><td>세션 종료 시 slot-reflect → insight 합성.</td></tr>
+  <tr><td><code>AGENTMEMORY_AUTO_COMPRESS</code></td><td>false</td><td class="on">true</td><td>LLM 압축. facts/concepts/importance LLM이 직접 채움.</td></tr>
+  <tr><td><code>AUTO_FORGET_ENABLED</code></td><td>true</td><td class="on">true (미설정)</td><td>1시간마다 자동 삭제 실행.</td></tr>
+  <tr><td><code>AUTO_FORGET_INTERVAL_MS</code></td><td>3600000</td><td>3600000</td><td>자동 삭제 주기(ms).</td></tr>
+  <tr><td><code>CONSOLIDATION_DECAY_DAYS</code></td><td>30</td><td>30</td><td>strength 감쇠 주기(일).</td></tr>
+  <tr><td><code>CONSOLIDATION_INTERVAL_MS</code></td><td>7200000</td><td>7200000</td><td>통합 파이프라인 주기(ms).</td></tr>
+  <tr><td><code>AGENTMEMORY_IMAGE_EMBEDDINGS</code></td><td>false</td><td class="off">false</td><td>이미지 임베딩 (실험적).</td></tr>
+  <tr><td><code>AGENTMEMORY_REFLECT</code></td><td>false</td><td class="on">true</td><td>insight 자동 합성.</td></tr>
+</table>
+
+<h3>보안·인증</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>설명</th></tr>
+  <tr><td><code>AGENTMEMORY_SECRET</code></td><td>(없음)</td><td>REST API + viewer Bearer 인증. 없으면 loopback 무인증 오픈 — 외부 노출 환경에서는 필수.</td></tr>
+</table>
+
+<h3>포트 &amp; 연결</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>설명</th></tr>
+  <tr><td><code>AGENTMEMORY_URL</code></td><td>http://localhost:3111</td><td>훅·MCP shim이 사용하는 REST API 주소.</td></tr>
+  <tr><td><code>AGENTMEMORY_VIEWER_URL</code></td><td>http://localhost:3113</td><td>status 출력에 표시되는 Viewer 주소.</td></tr>
+  <tr><td><code>III_REST_PORT</code></td><td>3111</td><td>REST API 포트. Viewer는 +2 = 3113.</td></tr>
+  <tr><td><code>III_STREAMS_PORT</code></td><td>3112</td><td>Streams API 포트.</td></tr>
+  <tr><td><code>III_ENGINE_URL</code></td><td>ws://localhost:49134</td><td>iii-engine WebSocket URL.</td></tr>
+  <tr><td><code>AGENTMEMORY_III_VERSION</code></td><td>0.11.2</td><td>Docker 이미지 핀. 0.11.6+은 미지원 (worker 모델 변경).</td></tr>
+</table>
+
+<h3>스냅샷 &amp; 팀</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>설명</th></tr>
+  <tr><td><code>SNAPSHOT_ENABLED</code></td><td>false</td><td>스냅샷 기능 활성. 단, 자동 interval 없음 — 외부 cron에서 POST /agentmemory/snapshot-create 호출 필요.</td></tr>
+  <tr><td><code>SNAPSHOT_DIR</code></td><td>~/.agentmemory/snapshots</td><td>스냅샷 저장 디렉토리.</td></tr>
+  <tr><td><code>TEAM_MODE</code></td><td></td><td><code>shared</code>로 설정 시 (TEAM_ID, USER_ID) 튜플로 메모리 격리.</td></tr>
+  <tr><td><code>CLAUDE_MEMORY_BRIDGE</code></td><td>false</td><td>압축 메모리를 Claude Code의 CLAUDE.md에 미러링.</td></tr>
+  <tr><td><code>OBSIDIAN_AUTO_EXPORT</code></td><td>false</td><td>consolidation마다 Obsidian 볼트에 자동 내보내기.</td></tr>
+</table>
+
+<h3>CLI 런타임</h3>
+<table>
+  <tr><th>env</th><th>기본값</th><th>설명</th></tr>
+  <tr><td><code>AGENTMEMORY_TOOLS</code></td><td>core</td><td><code>all</code>로 설정 시 51개 전체 MCP 도구 노출 (기본 7개). 서버사이드 플래그 — MCP shim env에 설정해도 무효.</td></tr>
+  <tr><td><code>AGENTMEMORY_DEBUG</code></td><td>false</td><td>MCP shim probe + standalone fallback 결정 과정 stderr 출력.</td></tr>
+  <tr><td><code>AGENTMEMORY_FORCE_PROXY</code></td><td>false</td><td>MCP shim livez probe 생략, AGENTMEMORY_URL 신뢰. 샌드박스 환경에서 사용.</td></tr>
+  <tr><td><code>STANDALONE_MCP</code></td><td>false</td><td>MCP shim only 모드 — 서버 없이 로컬 7 도구만 운영.</td></tr>
+</table>
+
+</section>
+
+
+</main>
+
+<script>
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var links = document.querySelectorAll('nav a[href^="#"]');
+  function onScroll() {
+    var y = window.scrollY + 100;
+    var cur = '';
+    sections.forEach(function(s) { if (s.offsetTop <= y) cur = s.id; });
+    links.forEach(function(l) {
+      l.classList.toggle('active', l.getAttribute('href') === '#' + cur);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+</body>
+</html>

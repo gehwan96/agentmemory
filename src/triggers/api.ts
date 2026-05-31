@@ -10,7 +10,6 @@ import { VERSION } from "../version.js";
 import { timingSafeCompare } from "../auth.js";
 import { renderViewerDocument } from "../viewer/document.js";
 import { getBoundViewerPort, getViewerSkipped } from "../viewer/server.js";
-import { MAX_FILES_UPPER_BOUND } from "../functions/replay.js";
 import {
   isGraphExtractionEnabled,
   isConsolidationEnabled,
@@ -492,16 +491,10 @@ export function registerApiTriggers(
       }
       if (body.maxFiles !== undefined) {
         const n = body.maxFiles as number;
-        if (
-          !Number.isInteger(n) ||
-          n < 1 ||
-          n > MAX_FILES_UPPER_BOUND
-        ) {
+        if (!Number.isInteger(n) || n < 1) {
           return {
             status_code: 400,
-            body: {
-              error: `maxFiles must be an integer between 1 and ${MAX_FILES_UPPER_BOUND}`,
-            },
+            body: { error: "maxFiles must be a positive integer" },
           };
         }
         payload.maxFiles = n;
@@ -953,7 +946,21 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/migrate", http_method: "POST" },
   });
 
-  sdk.registerFunction("api::evict", 
+  sdk.registerFunction("api::backfill-project",
+    async (req: ApiRequest<{ dryRun?: boolean; globalFallback?: string }>): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const result = await sdk.trigger({ function_id: "mem::backfill-project", payload: req.body ?? {} });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::backfill-project",
+    config: { api_path: "/agentmemory/backfill-project", http_method: "POST" },
+  });
+
+  sdk.registerFunction("api::evict",
     async (req: ApiRequest<{ dryRun?: boolean }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
@@ -2757,4 +2764,45 @@ export function registerApiTriggers(
     return { status_code: 200, body: result };
   });
   sdk.registerTrigger({ type: "http", function_id: "api::insight-search", config: { api_path: "/agentmemory/insights/search", http_method: "POST" } });
+
+  sdk.registerFunction("api::rebuild-vectors",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const fromIdx = parseOptionalInt(req.query_params?.["fromIdx"]) ?? 0;
+      const limitSessions = parseOptionalInt(req.query_params?.["limitSessions"]) ?? 60;
+      const result = await sdk.trigger({
+        function_id: "mem::rebuild-vectors",
+        payload: { fromIdx, limitSessions },
+      });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::rebuild-vectors",
+    config: { api_path: "/agentmemory/rebuild-vectors", http_method: "POST" },
+  });
+
+  sdk.registerFunction("api::diagnose-report",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      try {
+        const result = await sdk.trigger({ function_id: "mem::diagnose-report", payload: {} });
+        return { status_code: 200, body: result };
+      } catch (err) {
+        return {
+          status_code: 500,
+          body: { error: "diagnose-report failed", detail: err instanceof Error ? err.message : String(err) },
+        };
+      }
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::diagnose-report",
+    config: { api_path: "/agentmemory/diagnose-report", http_method: "GET" },
+  });
+
 }

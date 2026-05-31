@@ -19,7 +19,6 @@ import { getSearchIndex } from "./search.js";
 import { logger } from "../logger.js";
 
 export const MAX_FILES_DEFAULT = 200;
-export const MAX_FILES_UPPER_BOUND = 1000;
 
 const SENSITIVE_PATH_PATTERNS: RegExp[] = [
   /(^|[\\/_.-])secret([\\/_.-]|s?$)/i,
@@ -203,7 +202,7 @@ async function loadObservations(
   return rows.map((r) => (isRawShape(r) ? r : rawFromCompressed(r as CompressedObservation)));
 }
 
-async function findJsonlFiles(
+export async function findJsonlFiles(
   root: string,
   limit = 200,
 ): Promise<{
@@ -220,7 +219,9 @@ async function findJsonlFiles(
   // lock the 30s function timeout. `discovered` may underrepresent the
   // true count when traversalCapped fires — callers should surface that
   // distinction to the user.
-  const traversalCap = Math.max(limit * 50, 50_000);
+  // Decouple traversal budget from user-supplied limit so large --max-files
+  // values don't blow up walker time. 2M entries covers any realistic tree.
+  const traversalCap = Math.max(Math.min(limit * 50, 2_000_000), 50_000);
   async function walk(dir: string) {
     if (walked >= traversalCap) return;
     let names: string[];
@@ -298,7 +299,6 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
           truncated: boolean;
           traversalCapped: boolean;
           maxFiles: number;
-          maxFilesUpperBound: number;
         }
       | { success: false; error: string }
     > => {
@@ -325,13 +325,9 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
         return { success: false, error: "path not found" };
       }
 
-      // Valid integer requests are clamped to MAX_FILES_UPPER_BOUND so
-      // callers see a stable maxFiles in the response. Non-integer or
-      // <= 0 falls back to the safe default. The HTTP layer rejects
-      // out-of-range up front; this is the SDK-callable safety net.
       const maxFiles =
         Number.isInteger(data.maxFiles) && (data.maxFiles as number) > 0
-          ? Math.min(data.maxFiles as number, MAX_FILES_UPPER_BOUND)
+          ? (data.maxFiles as number)
           : MAX_FILES_DEFAULT;
       let files: string[] = [];
       let truncated = false;
@@ -360,7 +356,6 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
           truncated,
           traversalCapped,
           maxFiles,
-          maxFilesUpperBound: MAX_FILES_UPPER_BOUND,
         };
       }
 
@@ -461,7 +456,6 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
         truncated,
         traversalCapped,
         maxFiles,
-        maxFilesUpperBound: MAX_FILES_UPPER_BOUND,
       };
     },
   );

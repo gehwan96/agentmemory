@@ -12,7 +12,7 @@ import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { recordAccessBatch } from "./access-tracker.js";
 import { logger } from "../logger.js";
-import { expandProjectAliases, isPendingProject, expandWithPending } from "../mcp/project-aliases.js";
+import { expandProjectAliases } from "../mcp/project-aliases.js";
 
 // Compact mode trims each lesson's content for at-a-glance display. The
 // full content is fetched via memory_lesson_recall when the caller needs it.
@@ -22,6 +22,19 @@ export function registerSmartSearchFunction(
   sdk: ISdk,
   kv: StateKV,
   searchFn: (query: string, limit: number) => Promise<HybridSearchResult[]>,
+  verboseSearchFn?: (
+    query: string,
+    limit: number,
+  ) => Promise<{
+    results: HybridSearchResult[];
+    debug: {
+      bm25Top5: Array<{ obsId: string; sessionId: string; score: number }>;
+      vectorTop5: Array<{ obsId: string; sessionId: string; score: number }>;
+      hasEmbeddingProvider: boolean;
+      hasVectorIndex: boolean;
+      vectorIndexSize: number;
+    };
+  }>,
 ): void {
   sdk.registerFunction("mem::smart-search",
     async (data: {
@@ -30,6 +43,7 @@ export function registerSmartSearchFunction(
       limit?: number;
       project?: string;
       includeLessons?: boolean;
+      verbose?: boolean;
     }) => {
 
       if (data.expandIds && data.expandIds.length > 0) {
@@ -83,27 +97,51 @@ export function registerSmartSearchFunction(
       // are denser (curated insights) so 10 is usually plenty for a recall.
       const lessonLimit = Math.min(limit, 10);
       const includeLessons = data.includeLessons !== false;
+      const verbose = data.verbose === true;
 
       // Run observation hybrid-search and lesson recall in parallel so the
       // extra lesson lookup adds no wallclock when the underlying calls
       // can overlap. Lesson recall is best-effort: if mem::lesson-recall
       // fails or returns unexpected shape, log + fall back to empty.
-      const [hybridResults, lessons] = await Promise.all([
-        searchFn(data.query, limit),
-        includeLessons
-          ? recallLessons(sdk, data.query, lessonLimit, data.project)
-          : Promise.resolve([]),
-      ]);
+      type VerboseDebug = {
+        bm25Top5: Array<{ obsId: string; sessionId: string; score: number }>;
+        vectorTop5: Array<{ obsId: string; sessionId: string; score: number }>;
+        hasEmbeddingProvider: boolean;
+        hasVectorIndex: boolean;
+        vectorIndexSize: number;
+      };
+
+      let verboseDebug: VerboseDebug | undefined;
+      let hybridResults: HybridSearchResult[];
+      let lessons: Awaited<ReturnType<typeof recallLessons>>;
+
+      if (verbose && verboseSearchFn) {
+        const [verboseOut, lessonOut] = await Promise.all([
+          verboseSearchFn(data.query, limit),
+          includeLessons
+            ? recallLessons(sdk, data.query, lessonLimit, data.project)
+            : Promise.resolve([]),
+        ]);
+        hybridResults = verboseOut.results;
+        verboseDebug = verboseOut.debug;
+        lessons = lessonOut;
+      } else {
+        [hybridResults, lessons] = await Promise.all([
+          searchFn(data.query, limit),
+          includeLessons
+            ? recallLessons(sdk, data.query, lessonLimit, data.project)
+            : Promise.resolve([]),
+        ]);
+      }
 
       // Apply project filter if specified
       let filteredResults = hybridResults;
       if (data.project) {
-        // Expand to include confirmed aliases + pending pair candidates.
-        const projectAliasSet = new Set(
-          isPendingProject(data.project)
-            ? expandWithPending(data.project)
-            : expandProjectAliases(data.project),
-        );
+        // Expand to include confirmed aliases only.
+        // Pending pairs are intentionally excluded: a pending suggestion is an
+        // unverified hypothesis, not a confirmed identity — including them would
+        // silently leak memories from sibling repos before a human approves.
+        const projectAliasSet = new Set(expandProjectAliases(data.project));
         const filtered = await Promise.all(
           hybridResults.map(async (r) => {
             // mem::remember entries: check Memory.project directly
@@ -144,13 +182,26 @@ export function registerSmartSearchFunction(
         query: data.query,
         results: compact.length,
         lessons: lessons.length,
+        filteredOut: hybridResults.length - filteredResults.length,
       });
+
       const response: {
         mode: "compact";
         results: CompactSearchResult[];
         lessons?: CompactLessonResult[];
+        debug?: typeof verboseDebug & {
+          beforeProjectFilter: number;
+          afterProjectFilter: number;
+        };
       } = { mode: "compact", results: compact };
       if (includeLessons) response.lessons = lessons;
+      if (verbose && verboseDebug) {
+        response.debug = {
+          ...verboseDebug,
+          beforeProjectFilter: hybridResults.length,
+          afterProjectFilter: filteredResults.length,
+        };
+      }
       return response;
     },
   );

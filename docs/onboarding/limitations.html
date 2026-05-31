@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentmemory 아쉬운 점 · 한계 정리</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #161b22;
+  --bg3: #1c2333;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --accent: #58a6ff;
+  --accent2: #3fb950;
+  --accent3: #f78166;
+  --accent4: #d2a8ff;
+  --accent5: #ffa657;
+  --yellow: #e3b341;
+  --sidebar-w: 260px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  display: flex;
+}
+
+/* ── Sidebar ── */
+nav {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 20px 0;
+  z-index: 100;
+}
+nav .brand {
+  padding: 0 16px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+nav .brand h2 { font-size: 13px; color: var(--accent3); font-weight: 600; }
+nav .brand p { font-size: 11px; color: var(--text2); margin-top: 2px; }
+nav a {
+  display: block;
+  padding: 6px 16px;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 12.5px;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+}
+nav a:hover { color: var(--text); background: var(--bg3); }
+nav a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(88,166,255,.07); }
+nav .nav-section { font-size: 10px; font-weight: 700; color: var(--text2); letter-spacing: .08em; text-transform: uppercase; padding: 14px 16px 4px; }
+nav .count-badge {
+  float: right;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(247,129,102,.15);
+  color: var(--accent3);
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-top: 1px;
+}
+
+/* ── Main ── */
+main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 960px;
+  padding: 48px 48px 80px;
+}
+
+/* ── Headings ── */
+h1 { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+h1 span { color: var(--accent3); }
+.hero-sub { color: var(--text2); font-size: 14px; margin-bottom: 36px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+h2 { font-size: 20px; font-weight: 700; margin: 56px 0 16px; padding-top: 8px; color: var(--text);
+  border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+h2 .cat { display: inline-block; border-radius: 4px;
+  font-size: 12px; padding: 1px 8px; margin-right: 8px; font-weight: 800; vertical-align: middle; }
+h2 .cat.sec  { background: rgba(247,129,102,.25); color: var(--accent3); }
+h2 .cat.ops  { background: rgba(255,166,87,.2); color: var(--accent5); }
+h2 .cat.srch { background: rgba(226,179,65,.2); color: var(--yellow); }
+h2 .cat.perf { background: rgba(63,185,80,.15); color: var(--accent2); }
+h2 .cat.cfg  { background: rgba(88,166,255,.12); color: var(--accent); }
+h3 { font-size: 15px; font-weight: 600; margin: 32px 0 10px; color: var(--accent4); }
+
+/* ── Severity badge ── */
+.sev {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 2px 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+  letter-spacing: .04em;
+}
+.sev.high   { background: rgba(247,129,102,.18); color: var(--accent3); border: 1px solid rgba(247,129,102,.35); }
+.sev.medium { background: rgba(226,179,65,.15);  color: var(--yellow);  border: 1px solid rgba(226,179,65,.3); }
+.sev.low    { background: rgba(139,148,158,.12); color: var(--text2);   border: 1px solid var(--border); }
+
+/* ── Item card ── */
+.item-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin: 20px 0;
+  position: relative;
+}
+.item-card.high   { border-left: 3px solid var(--accent3); }
+.item-card.medium { border-left: 3px solid var(--yellow); }
+.item-card.low    { border-left: 3px solid var(--border); }
+.item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.item-num {
+  display: inline-block;
+  width: 22px; height: 22px; line-height: 22px; text-align: center;
+  border-radius: 50%; font-size: 11px; font-weight: 800;
+  background: var(--bg3); color: var(--text2);
+  flex-shrink: 0;
+}
+.item-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.item-body { font-size: 13px; color: var(--text); line-height: 1.75; }
+.item-body p { margin: 6px 0; }
+.item-ref { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  font-size: 11px; font-family: 'SF Mono', Menlo, monospace; color: var(--text2); padding: 1px 7px; margin: 0 2px; }
+
+/* ── Callout ── */
+.callout { border-radius: 8px; padding: 14px 16px; margin: 14px 0; font-size: 13px; }
+.callout.warn    { background: rgba(255,165,0,.1); border: 1px solid rgba(255,165,0,.3); }
+.callout.warn .icon { color: var(--accent5); font-weight: 800; margin-right: 6px; }
+.callout.info    { background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.25); }
+.callout.info .icon { color: var(--accent); font-weight: 800; margin-right: 6px; }
+.callout.success { background: rgba(63,185,80,.08); border: 1px solid rgba(63,185,80,.25); }
+.callout.success .icon { color: var(--accent2); font-weight: 800; margin-right: 6px; }
+.callout strong { color: var(--text); }
+.callout code { background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Menlo, monospace; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+th { background: var(--bg3); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.02); }
+td code { background: var(--bg3); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Menlo, monospace; color: var(--accent4); }
+td .hi   { color: var(--accent3); font-size: 12px; font-weight: 700; }
+td .med  { color: var(--yellow);  font-size: 12px; font-weight: 700; }
+td .low  { color: var(--text2);   font-size: 12px; }
+
+p { margin: 10px 0; color: var(--text); }
+ul { margin: 8px 0 8px 20px; }
+li { margin: 4px 0; color: var(--text); }
+
+/* ── Summary box ── */
+.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+.sum-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; text-align: center; }
+.sum-card .cnt { font-size: 24px; font-weight: 800; }
+.sum-card .cnt.sec  { color: var(--accent3); }
+.sum-card .cnt.ops  { color: var(--accent5); }
+.sum-card .cnt.srch { color: var(--yellow); }
+.sum-card .cnt.perf { color: var(--accent2); }
+.sum-card .cnt.cfg  { color: var(--accent); }
+.sum-card .lbl { font-size: 11px; color: var(--text2); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<nav id="nav">
+  <div class="brand">
+    <h2>agentmemory</h2>
+    <p>아쉬운 점 · 한계 정리</p>
+  </div>
+  <div class="nav-section">개요</div>
+  <a href="#overview">한눈에 보기</a>
+  <div class="nav-section">A. 보안·개인정보 <span class="count-badge">3</span></div>
+  <a href="#pii-blind">PII 마스킹 사각지대</a>
+  <a href="#pii-noext">패턴 확장 불가</a>
+  <a href="#no-auth">기본 무인증</a>
+  <div class="nav-section">B. 데이터 내구성 <span class="count-badge">4</span></div>
+  <a href="#crash-loss">크래시 파생 데이터 유실</a>
+  <a href="#stale-session">stale-session 잔류</a>
+  <a href="#no-auto-snapshot">자동 스냅샷 없음</a>
+  <a href="#stop-hook-dep">Stop 훅 의존성</a>
+  <div class="nav-section">C. 검색 품질 <span class="count-badge">2</span></div>
+  <a href="#no-importance-filter">importance 필터 부재</a>
+  <a href="#obs-cap-silent">관측 상한 묵시적 차단</a>
+  <div class="nav-section">D. 성능·확장성 <span class="count-badge">3</span></div>
+  <a href="#brute-force-vec">벡터 brute-force</a>
+  <a href="#viewer-o2">Viewer O(n²) 시뮬레이션</a>
+  <a href="#llm-per-tool">tool 호출마다 LLM 비용</a>
+  <div class="nav-section">E. 설정·생태계 <span class="count-badge">5</span></div>
+  <a href="#stale-comment">stale 주석</a>
+  <a href="#dup-const">동일 이름 상수 중복</a>
+  <a href="#engine-pin">iii-engine 버전 핀</a>
+  <a href="#litellm-embed">LiteLLM 임베딩 미지원</a>
+  <a href="#tools-serverside">TOOLS 서버사이드 한정</a>
+</nav>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<main>
+
+<h1>agentmemory <span>아쉬운 점 · 한계 정리</span></h1>
+<p class="hero-sub">
+  <a href="pipeline-deep-dive.html" style="color:var(--accent);text-decoration:none;">파이프라인 딥다이브</a> 문서에서 드러난 설계·운영상 한계를
+  <strong>심각도 · 카테고리별</strong>로 구조화한 참조 문서입니다.<br>
+  각 항목에는 근거 섹션, 현상 설명, 완화책(있으면)이 포함됩니다.
+  <strong>코드 수준 근거는 모두 파이프라인 딥다이브 문서 기준</strong>입니다.
+</p>
+
+
+<!-- ═══════════ 0. 한눈에 보기 ═══════════ -->
+<section id="overview">
+<h2><span class="cat sec">개요</span>한눈에 보기</h2>
+
+<div class="summary-grid">
+  <div class="sum-card"><div class="cnt sec">3</div><div class="lbl">A. 보안·개인정보</div></div>
+  <div class="sum-card"><div class="cnt ops">4</div><div class="lbl">B. 데이터 내구성</div></div>
+  <div class="sum-card"><div class="cnt srch">2</div><div class="lbl">C. 검색 품질</div></div>
+  <div class="sum-card"><div class="cnt perf">3</div><div class="lbl">D. 성능·확장성</div></div>
+  <div class="sum-card"><div class="cnt cfg">5</div><div class="lbl">E. 설정·생태계</div></div>
+</div>
+
+<table>
+  <tr><th>#</th><th>항목</th><th>심각도</th><th>카테고리</th><th>한 줄 요약</th></tr>
+  <tr><td>1</td><td><a href="#pii-blind" style="color:var(--accent)">PII 마스킹 사각지대</a></td><td><span class="sev high">High</span></td><td>A. 보안</td><td>주민번호·이메일·전화번호 등 미탐지, 짧은 키 통과</td></tr>
+  <tr><td>2</td><td><a href="#pii-noext" style="color:var(--accent)">PII 패턴 확장 불가</a></td><td><span class="sev high">High</span></td><td>A. 보안</td><td>env로 패턴 추가 불가, 소스 수정 + 재빌드 필요</td></tr>
+  <tr><td>3</td><td><a href="#no-auth" style="color:var(--accent)">기본 무인증</a></td><td><span class="sev high">High</span></td><td>A. 보안</td><td>AGENTMEMORY_SECRET 미설정 시 loopback 무인증 오픈</td></tr>
+  <tr><td>4</td><td><a href="#crash-loss" style="color:var(--accent)">크래시 파생 데이터 유실</a></td><td><span class="sev high">High</span></td><td>B. 운영</td><td>강제종료 시 요약·그래프·lesson·insight·Crystal 재생성 불가</td></tr>
+  <tr><td>5</td><td><a href="#stale-session" style="color:var(--accent)">stale-session 잔류</a></td><td><span class="sev medium">Medium</span></td><td>B. 운영</td><td>크래시 세션이 "active"로 영구 잔류, 자동 reaper 없음</td></tr>
+  <tr><td>6</td><td><a href="#no-auto-snapshot" style="color:var(--accent)">자동 스냅샷 없음</a></td><td><span class="sev medium">Medium</span></td><td>B. 운영</td><td>SNAPSHOT_ENABLED=true여도 내부 interval 없어 외부 cron 필요</td></tr>
+  <tr><td>7</td><td><a href="#stop-hook-dep" style="color:var(--accent)">Stop 훅 의존성</a></td><td><span class="sev medium">Medium</span></td><td>B. 운영</td><td>정상 종료해야만 요약·그래프·교훈 파생 데이터 보장</td></tr>
+  <tr><td>8</td><td><a href="#no-importance-filter" style="color:var(--accent)">importance 필터 부재</a></td><td><span class="sev medium">Medium</span></td><td>C. 검색</td><td>smart-search에는 importance 임계값 없음 — 저품질 오염 가능</td></tr>
+  <tr><td>9</td><td><a href="#obs-cap-silent" style="color:var(--accent)">관측 상한 묵시적 차단</a></td><td><span class="sev medium">Medium</span></td><td>C. 검색</td><td>500개 초과 관측은 eviction 아닌 쓰기 거부, 인식 어려움</td></tr>
+  <tr><td>10</td><td><a href="#brute-force-vec" style="color:var(--accent)">벡터 brute-force</a></td><td><span class="sev medium">Medium</span></td><td>D. 성능</td><td>ANN 인덱스 없음, 관측 누적 시 O(n) 선형 스캔</td></tr>
+  <tr><td>11</td><td><a href="#viewer-o2" style="color:var(--accent)">Viewer O(n²) 시뮬레이션</a></td><td><span class="sev low">Low</span></td><td>D. 성능</td><td>커스텀 힘 시뮬레이션 O(n²) Coulomb — 노드 증가 시 성능 저하</td></tr>
+  <tr><td>12</td><td><a href="#llm-per-tool" style="color:var(--accent)">tool 호출마다 LLM 비용</a></td><td><span class="sev medium">Medium</span></td><td>D. 성능</td><td>AUTO_COMPRESS=true 시 PostToolUse 이벤트마다 Qwen 1회 호출</td></tr>
+  <tr><td>13</td><td><a href="#stale-comment" style="color:var(--accent)">stale 주석</a></td><td><span class="sev low">Low</span></td><td>E. 설정</td><td>.env.example 주석이 실제 동작과 불일치 — 혼란 야기</td></tr>
+  <tr><td>14</td><td><a href="#dup-const" style="color:var(--accent)">동일 이름 상수 중복</a></td><td><span class="sev medium">Medium</span></td><td>E. 설정</td><td>MAX_OBS_PER_SESSION이 두 곳에 다른 값(500/5000)으로 존재</td></tr>
+  <tr><td>15</td><td><a href="#engine-pin" style="color:var(--accent)">iii-engine 버전 핀</a></td><td><span class="sev medium">Medium</span></td><td>E. 설정</td><td>0.11.6+ 미지원, worker 모델 변경 시 버전 핀이 발목</td></tr>
+  <tr><td>16</td><td><a href="#litellm-embed" style="color:var(--accent)">LiteLLM 임베딩 미지원</a></td><td><span class="sev medium">Medium</span></td><td>E. 설정</td><td>LiteLLM이 /v1/embeddings 미지원 → 별도 로컬 Xenova 강제</td></tr>
+  <tr><td>17</td><td><a href="#tools-serverside" style="color:var(--accent)">TOOLS 서버사이드 한정</a></td><td><span class="sev low">Low</span></td><td>E. 설정</td><td>AGENTMEMORY_TOOLS를 MCP shim env에 설정해도 무효</td></tr>
+</table>
+</section>
+
+
+<!-- ═══════════ A. 보안·개인정보 ═══════════ -->
+<section id="sec">
+<h2><span class="cat sec">A</span>보안 · 개인정보</h2>
+</section>
+
+<!-- #1 -->
+<section id="pii-blind">
+<div class="item-card high">
+  <div class="item-header">
+    <span class="item-num">1</span>
+    <span class="sev high">High</span>
+    <span class="item-title">PII 마스킹 사각지대</span>
+    <span class="item-ref">섹션 9 · privacy.ts</span>
+  </div>
+  <div class="item-body">
+    <p><code>stripPrivateData()</code>는 <strong>14개 하드코딩 정규식</strong>으로만 민감 정보를 탐지합니다. 다음은 현재 패턴에 포함되지 않아 <strong>그대로 KV에 저장됩니다.</strong></p>
+    <ul>
+      <li>주민등록번호 / 이메일 / 전화번호 / 주소 등 개인 식별 정보 (PII)</li>
+      <li><strong>20자 미만</strong>의 짧은 비밀번호 · API 키 (<code>api_key=short123</code> 형태는 통과)</li>
+      <li>사용자 정의 내부 토큰 (조직 특화 접두사)</li>
+    </ul>
+    <div class="callout warn">
+      <span class="icon">⚠</span><strong>실제 위험 —</strong>
+      DB 조회 결과, 파일 내용, 환경변수 출력 등이 tool output으로 캡처될 때
+      주민번호·이메일이 <code>mem:obs:{sessionId}</code>에 평문으로 저장될 수 있습니다.
+      이 데이터는 LLM(Qwen) 압축 요청 payload에도 포함됩니다.
+    </div>
+    <div class="callout success">
+      <span class="icon">💡</span><strong>완화책 —</strong>
+      민감 내용을 Claude에 직접 노출하지 않거나, <code>&lt;private&gt;내용&lt;/private&gt;</code> 태그로 명시적으로 감싸면 패턴 무관하게 <code>[REDACTED]</code>로 치환됩니다.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #2 -->
+<section id="pii-noext">
+<div class="item-card high">
+  <div class="item-header">
+    <span class="item-num">2</span>
+    <span class="sev high">High</span>
+    <span class="item-title">PII 패턴 확장 불가</span>
+    <span class="item-ref">섹션 9 · privacy.ts:5-20</span>
+  </div>
+  <div class="item-body">
+    <p>패턴 목록이 <code>src/functions/privacy.ts</code>에 하드코딩되어 있고, <strong>환경변수로 커스텀 패턴을 추가하는 방법이 없습니다.</strong></p>
+    <ul>
+      <li><code>SECRET_PATTERN_SOURCES</code> 등의 env 확장점은 존재하지 않습니다</li>
+      <li>조직 특화 내부 토큰(예: 사내 SSO 토큰, 업무용 API 키)을 추가하려면 소스 수정 후 재빌드 필요</li>
+      <li>Fork 없이는 upstream 업데이트와 패턴 커스터마이징을 동시에 유지하기 어렵습니다</li>
+    </ul>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>현실적 대안 —</strong>
+      <code>src/functions/privacy.ts</code> 직접 수정 후 재빌드하거나, 민감 작업은 <code>AGENTMEMORY_AUTO_COMPRESS=false</code>인 별도 프로젝트 세션에서 격리 운영하는 방법을 검토하세요.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #3 -->
+<section id="no-auth">
+<div class="item-card high">
+  <div class="item-header">
+    <span class="item-num">3</span>
+    <span class="sev high">High</span>
+    <span class="item-title">기본 무인증 오픈</span>
+    <span class="item-ref">섹션 9 · 섹션 12 · .env AGENTMEMORY_SECRET</span>
+  </div>
+  <div class="item-body">
+    <p><code>AGENTMEMORY_SECRET</code>를 설정하지 않으면 REST API(<code>:3111</code>)와 Viewer(<code>:3113</code>)가 <strong>loopback에서 무인증으로 열립니다.</strong></p>
+    <ul>
+      <li>동일 머신에서 실행 중인 다른 프로세스가 인증 없이 전체 메모리 DB에 접근 가능</li>
+      <li>팀 공유 머신, 원격 개발 환경(codespace, 사내 VM)에서는 심각한 노출 위험</li>
+      <li>기본값이 "비활성"이라 사용자가 별도 설정하지 않으면 노출 상태를 인지하기 어려움</li>
+    </ul>
+    <div class="callout warn">
+      <span class="icon">⚠</span><strong>즉시 조치 —</strong>
+      <code>~/.agentmemory/.env</code>에 <code>AGENTMEMORY_SECRET=강한-랜덤-문자열</code>을 추가하세요.
+      설정 후 Bearer 토큰 인증이 활성화되어 외부 접근이 차단됩니다.
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ═══════════ B. 데이터 내구성 ═══════════ -->
+<section id="ops">
+<h2><span class="cat ops">B</span>데이터 내구성 · 운영</h2>
+</section>
+
+<!-- #4 -->
+<section id="crash-loss">
+<div class="item-card high">
+  <div class="item-header">
+    <span class="item-num">4</span>
+    <span class="sev high">High</span>
+    <span class="item-title">크래시 시 파생 데이터 유실</span>
+    <span class="item-ref">섹션 8 · events.ts:47-76</span>
+  </div>
+  <div class="item-body">
+    <p>IDE·터미널 강제종료(크래시) 시 Stop/SessionEnd 훅이 실행되지 않아 <strong>파생 데이터가 영구 유실됩니다.</strong></p>
+    <table>
+      <tr><th>유형</th><th>보존?</th><th>비고</th></tr>
+      <tr><td>RawObservation / CompressedObservation (KV)</td><td class="hi">보존 ✓</td><td>훅 이벤트마다 즉시 영속</td></tr>
+      <tr><td>BM25 · 벡터 인덱스</td><td class="hi">복구 ✓</td><td>부팅 시 rebuildIndex()로 자동 재구성</td></tr>
+      <tr><td>SessionSummary</td><td class="hi" style="color:var(--accent3)">유실 ✗</td><td>Stop 훅 → mem::summarize에서만 생성</td></tr>
+      <tr><td>Graph 노드/엣지</td><td class="hi" style="color:var(--accent3)">유실 ✗</td><td>Stop 훅 → mem::graph-extract에서만 생성</td></tr>
+      <tr><td>lesson · insight · Crystal</td><td class="hi" style="color:var(--accent3)">유실 ✗</td><td>slot-reflect, SessionEnd에서만 파생</td></tr>
+    </table>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>완화책 —</strong>
+      중요한 세션이 크래시로 유실됐다면 <code>POST /agentmemory/replay/import-jsonl</code>로
+      <code>~/.claude/projects</code>의 JSONL을 재임포트해 관측·Crystal·Lesson을 복원할 수 있습니다.
+      단, SessionSummary(요약)는 재임포트로도 완전 재생성이 되지 않습니다.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #5 -->
+<section id="stale-session">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">5</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">stale-session 자동 reaper 없음</span>
+    <span class="item-ref">섹션 8 · observe.ts</span>
+  </div>
+  <div class="item-body">
+    <p>크래시로 Stop/SessionEnd 훅이 실행되지 않은 세션은 상태가 <code>"active"</code>로 남습니다.
+    이를 자동으로 감지해 <code>"abandoned"</code>나 <code>"ended"</code>로 전환하는 백그라운드 reaper가 없습니다.</p>
+    <ul>
+      <li>잔류한 active 세션은 다음 세션 시작 시 context 주입에서 "현재 세션"과 혼동될 수 있음</li>
+      <li>session 목록/통계 조회 시 종료된 세션이 active로 집계됨</li>
+      <li>대량 크래시 이력이 쌓이면 <code>mem:sessions</code> KV가 오염됨</li>
+    </ul>
+    <div class="callout warn">
+      <span class="icon">⚠</span><strong>현재 상태 —</strong>
+      자동 수정 방법이 없습니다. <code>POST /agentmemory/session/end</code>를 수동 호출하거나, 재임포트 후 상태를 직접 정리해야 합니다.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #6 -->
+<section id="no-auto-snapshot">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">6</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">자동 스냅샷 없음</span>
+    <span class="item-ref">섹션 8 · .env SNAPSHOT_ENABLED</span>
+  </div>
+  <div class="item-body">
+    <p><code>SNAPSHOT_ENABLED=true</code>로 설정해도 <strong>코드 내부에 자동 setInterval이 없습니다.</strong>
+    <code>POST /agentmemory/snapshot-create</code>를 외부에서 주기적으로 호출해야만 <code>state_store.db</code> 백업이 생성됩니다.</p>
+    <ul>
+      <li>사용자가 외부 cron 또는 별도 스크립트를 직접 설정해야 함</li>
+      <li><code>SNAPSHOT_INTERVAL</code> env 변수는 존재하지만 이를 내부에서 읽어 interval을 만드는 코드가 없음</li>
+      <li>DB 손상 · 디스크 오류 시 마지막 스냅샷 이후 모든 기억이 유실됨</li>
+    </ul>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>권장 조치 —</strong>
+      시스템 crontab에 <code>curl -X POST http://localhost:3111/agentmemory/snapshot-create -H "Authorization: Bearer $SECRET"</code>를 1시간마다 등록하거나, <code>launchd</code>(macOS)로 주기 실행을 설정하세요.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #7 -->
+<section id="stop-hook-dep">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">7</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">Stop 훅 의존성 — 정상 종료 필수</span>
+    <span class="item-ref">섹션 8 · stop.ts · session-end.ts</span>
+  </div>
+  <div class="item-body">
+    <p>요약(<code>mem::summarize</code>), 그래프 추출(<code>mem::graph-extract</code>), insight 합성(<code>mem::slot-reflect</code>), 4-tier 통합(<code>mem::consolidate-pipeline</code>)은 <strong>모두 Stop 또는 SessionEnd 훅이 정상 실행된 이후에만 트리거됩니다.</strong></p>
+    <ul>
+      <li>짧은 탐색 세션이나 인터럽트가 잦은 워크플로에서는 유익한 세션이 누락될 수 있음</li>
+      <li>2시간 주기 consolidation은 데몬이 살아있는 동안만 동작 — 재시작 시 간격 리셋</li>
+    </ul>
+    <div class="callout success">
+      <span class="icon">💡</span><strong>권장 습관 —</strong>
+      IDE 창을 닫거나 터미널을 종료하기 전에 Claude Code의 <code>/stop</code> 명령으로 세션을 정상 종료하면 파생 데이터 생성이 보장됩니다.
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ═══════════ C. 검색 품질 ═══════════ -->
+<section id="srch">
+<h2><span class="cat srch">C</span>검색 품질</h2>
+</section>
+
+<!-- #8 -->
+<section id="no-importance-filter">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">8</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">smart-search에 importance 필터 없음</span>
+    <span class="item-ref">섹션 10 · hybrid-search.ts · context.ts</span>
+  </div>
+  <div class="item-body">
+    <p>context 주입 단계에서는 <strong>importance ≥ 5 강제 필터</strong>가 적용되지만, <code>mem::smart-search</code>와 <code>mem::search</code>에는 이 필터가 없습니다. 모든 인덱싱된 관측이 BM25/벡터/그래프 점수로 경쟁합니다.</p>
+    <ul>
+      <li>합성 압축 경로(AUTO_COMPRESS=false)에서 생성된 관측은 <code>importance=5 고정</code>, <code>confidence=0.3 고정</code>으로 품질 구분이 무의미</li>
+      <li>저품질 관측(중복, 단순 탐색 등)이 직접 검색 결과 상위에 오를 수 있음</li>
+      <li>검색 품질 방어는 context 주입 단계에서만 강하게 작동하고, API 직접 호출에는 약함</li>
+    </ul>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>현실적 대안 —</strong>
+      LLM 압축(AUTO_COMPRESS=true)을 켜서 Qwen이 importance를 직접 채우게 하거나,
+      <code>mem::evict</code>의 <code>lowImportanceThreshold</code>를 높여 저품질 관측을 주기적으로 정리하세요.
+      검색 정밀도가 부족하다면 <code>RERANK_ENABLED=true</code>로 cross-encoder 재정렬을 활성화하세요.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #9 -->
+<section id="obs-cap-silent">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">9</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">관측 상한 초과 시 묵시적 차단</span>
+    <span class="item-ref">섹션 8 · config.ts:145 · observe.ts</span>
+  </div>
+  <div class="item-body">
+    <p><code>MAX_OBS_PER_SESSION</code>(기본 500) 초과 시 observe 요청은 <code>{success: false}</code>를 반환하며 <strong>기존 데이터는 삭제하지 않고 새 관측만 차단합니다.</strong> 사용자 입장에서는 세션이 "조용히 기억하지 않는" 상태가 됩니다.</p>
+    <ul>
+      <li>긴 코딩 세션(수백 개 tool 호출)에서 후반부 관측이 통째로 누락됨</li>
+      <li>훅 스크립트는 실패 응답을 로그에 남기지만, 일반 사용 중에는 인지하기 어려움</li>
+      <li>또한 동일 이름이 두 곳에 다른 값으로 존재: import 검증 상한은 하드코딩 <strong>5,000</strong> (<code>export-import.ts:190</code>), 런타임 쓰기 한도는 env <strong>500</strong> (<code>config.ts:145</code>)</li>
+    </ul>
+    <div class="callout warn">
+      <span class="icon">⚠</span><strong>혼동 주의 —</strong>
+      <code>MAX_OBS_PER_SESSION=500</code>은 eviction 상한이 아닙니다. 초과 시 삭제가 아닌 <strong>쓰기 거부</strong>입니다.
+      긴 세션이 예상된다면 <code>~/.agentmemory/.env</code>에서 값을 높여두세요.
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ═══════════ D. 성능·확장성 ═══════════ -->
+<section id="perf">
+<h2><span class="cat perf">D</span>성능 · 확장성</h2>
+</section>
+
+<!-- #10 -->
+<section id="brute-force-vec">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">10</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">벡터 검색 brute-force top-k</span>
+    <span class="item-ref">섹션 5 · hybrid-search.ts</span>
+  </div>
+  <div class="item-body">
+    <p>벡터 검색은 HNSW·IVF 등의 ANN(Approximate Nearest Neighbor) 인덱스 없이 <strong>전체 벡터에 대한 코사인 유사도를 순차 계산</strong>합니다. 관측이 누적될수록 검색 지연이 선형 증가합니다.</p>
+    <ul>
+      <li>적은 세션(~수백 개 관측)에서는 문제 없음</li>
+      <li>장기 사용 + 다수 프로젝트 운영 시 스마트 서치 응답 시간 증가 예상</li>
+      <li><code>RERANK_ENABLED=true</code>까지 켜면 벡터 스캔 + cross-encoder 재정렬이 중첩되어 지연 누적</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- #11 -->
+<section id="viewer-o2">
+<div class="item-card low">
+  <div class="item-header">
+    <span class="item-num">11</span>
+    <span class="sev low">Low</span>
+    <span class="item-title">Viewer 힘 시뮬레이션 O(n²)</span>
+    <span class="item-ref">섹션 5 · index.html · runSimulation()</span>
+  </div>
+  <div class="item-body">
+    <p>Viewer(<code>:3113</code>)의 그래프 레이아웃은 d3/vis/cytoscape 없이 커스텀 HTML5 Canvas로 직접 구현되어 있습니다. Coulomb 척력 계산이 <strong>O(n²)</strong> — 노드 수 제곱에 비례해 CPU 부하가 증가합니다.</p>
+    <ul>
+      <li>수십 개 노드까지는 쾌적하나, 수백 개 이상이 되면 브라우저 탭 CPU 사용률 급증</li>
+      <li>감쇠 0.9로 시뮬레이션이 멈추지 않으면 지속적으로 계산이 일어남</li>
+      <li>외부 그래프 라이브러리(d3-force, cytoscape) 미사용으로 최적화 여지가 제한됨</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- #12 -->
+<section id="llm-per-tool">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">12</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">tool 호출마다 LLM 비용 발생</span>
+    <span class="item-ref">섹션 3 · compress.ts · 섹션 0 설정</span>
+  </div>
+  <div class="item-body">
+    <p><code>AGENTMEMORY_AUTO_COMPRESS=true</code> 설정 시 <strong>PostToolUse 이벤트마다 Qwen LLM을 1회 호출</strong>합니다. 활발한 코딩 세션에서는 수십~수백 회의 LLM 호출이 발생합니다.</p>
+    <ul>
+      <li>LiteLLM 프록시에 요청 부하 누적 — rate limit에 걸릴 수 있음</li>
+      <li>tool 호출 응답 대기 시간과 별도로 압축 비용이 중첩 (비동기지만 세션 종료 처리에 영향)</li>
+      <li>LLM 비용 유료 제공자 사용 시 관측 수 × LLM 비용이 직접 과금</li>
+      <li>합성 압축 대비 품질이 높지만, 경량 작업(파일 탐색, 간단한 read) 관측도 동일 비용 소모</li>
+    </ul>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>트레이드오프 —</strong>
+      비용/지연이 부담스러우면 <code>AGENTMEMORY_AUTO_COMPRESS=false</code>로 전환하세요.
+      합성 압축은 LLM 없이 즉시 완료되지만 <code>facts=[], concepts=[], importance=5 고정</code>으로 품질이 낮아집니다.
+      중간 지점으로 <code>SUMMARIZE_CHUNK_CONCURRENCY</code>를 낮춰 동시 요청 수를 제한하는 방법도 있습니다.
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ═══════════ E. 설정·생태계 ═══════════ -->
+<section id="cfg">
+<h2><span class="cat cfg">E</span>설정 · 생태계 혼란</h2>
+</section>
+
+<!-- #13 -->
+<section id="stale-comment">
+<div class="item-card low">
+  <div class="item-header">
+    <span class="item-num">13</span>
+    <span class="sev low">Low</span>
+    <span class="item-title">stale 주석 — 동작 오해 유발</span>
+    <span class="item-ref">섹션 0 · .env.example:29 · openai.ts</span>
+  </div>
+  <div class="item-body">
+    <p><code>.env.example</code> 내 <em>"OPENAI_API_KEY는 임베딩 전용, chat completion은 PR #307 예정"</em> 주석이 오래된 상태입니다. 실제 코드는 이미 <code>POST /v1/chat/completions</code>를 호출하며 LLM 기능이 완전히 동작합니다.</p>
+    <ul>
+      <li>신규 설치자가 주석을 믿고 "LLM은 안 된다"고 오해할 수 있음</li>
+      <li>LiteLLM + Qwen 구성 시 예상치 못한 LLM 호출 발생으로 혼란</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- #14 -->
+<section id="dup-const">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">14</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">동일 이름 상수 중복 — MAX_OBS_PER_SESSION</span>
+    <span class="item-ref">섹션 8 · export-import.ts:190 · config.ts:145</span>
+  </div>
+  <div class="item-body">
+    <p><code>MAX_OBS_PER_SESSION</code>이라는 이름이 코드 내 두 곳에 서로 다른 의미와 값으로 존재합니다.</p>
+    <table>
+      <tr><th>위치</th><th>값</th><th>의미</th></tr>
+      <tr><td><code>export-import.ts:190</code></td><td><code>5,000</code> (하드코딩)</td><td>import 데이터 검증 상한 — 초과 시 import 거부</td></tr>
+      <tr><td><code>config.ts:145</code></td><td><code>500</code> (env 기본값)</td><td>런타임 관측 쓰기 상한 — 초과 시 observe 차단</td></tr>
+    </table>
+    <p>이름이 동일해 env를 통해 한쪽을 변경하면 다른 쪽도 바뀐다고 오해할 수 있습니다. import 검증 값은 env 미지원 하드코딩이어서 변경 불가합니다.</p>
+  </div>
+</div>
+</section>
+
+<!-- #15 -->
+<section id="engine-pin">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">15</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">iii-engine 버전 핀 — 0.11.6+ 미지원</span>
+    <span class="item-ref">섹션 12 · .env AGENTMEMORY_III_VERSION</span>
+  </div>
+  <div class="item-body">
+    <p><code>AGENTMEMORY_III_VERSION=0.11.2</code>에 고정되어 있으며, <strong>0.11.6 이상 버전은 worker 모델 변경으로 미지원</strong>입니다. iii-engine 자체 보안 패치나 버그픽스가 있어도 업그레이드가 차단됩니다.</p>
+    <ul>
+      <li>Docker 이미지 버전이 하드코딩으로 관리 — upstream 변경 시 agentmemory 쪽 수정 필요</li>
+      <li>0.11.2 이미지에 취약점이 발생해도 단독 업그레이드 불가</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- #16 -->
+<section id="litellm-embed">
+<div class="item-card medium">
+  <div class="item-header">
+    <span class="item-num">16</span>
+    <span class="sev medium">Medium</span>
+    <span class="item-title">LiteLLM 임베딩 미지원 — Xenova 강제</span>
+    <span class="item-ref">섹션 0 설정 · .env EMBEDDING_PROVIDER</span>
+  </div>
+  <div class="item-body">
+    <p>NHN 내부 LiteLLM 플레이그라운드가 <code>/v1/embeddings</code>를 미지원합니다. 따라서 <code>EMBEDDING_PROVIDER=local</code>로 강제 설정해 Xenova/all-MiniLM-L6-v2 로컬 384차원 모델을 사용합니다.</p>
+    <ul>
+      <li>Xenova 384-dim은 코드 시맨틱보다 자연어 유사도에 최적화 — 코드 심볼 검색 정밀도 한계</li>
+      <li>첫 임베딩 요청 시 모델 파일 다운로드 및 캐시 — 초기 지연 발생</li>
+      <li>임베딩 프로바이더 변경 시 차원 불일치(<code>dim guard</code>)로 인덱스 강제 초기화 필요</li>
+      <li>LiteLLM 측 임베딩 지원이 추가되더라도 기존 인덱스 재구성 비용 발생</li>
+    </ul>
+    <div class="callout info">
+      <span class="icon">💡</span><strong>참고 —</strong>
+      Voyage AI (<code>VOYAGE_API_KEY</code>)는 코드 임베딩 최적화 모델을 제공합니다. LiteLLM 외 별도 키를 발급받을 수 있다면 <code>EMBEDDING_PROVIDER=voyage</code>로 전환 시 코드 검색 품질이 개선될 수 있습니다. 단, 인덱스 완전 재구성 필요.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- #17 -->
+<section id="tools-serverside">
+<div class="item-card low">
+  <div class="item-header">
+    <span class="item-num">17</span>
+    <span class="sev low">Low</span>
+    <span class="item-title">AGENTMEMORY_TOOLS — MCP shim env 미지원</span>
+    <span class="item-ref">섹션 12 · .env AGENTMEMORY_TOOLS</span>
+  </div>
+  <div class="item-body">
+    <p><code>AGENTMEMORY_TOOLS=all</code> 설정으로 51개 전체 MCP 도구를 노출할 수 있으나, 이 값은 <strong>서버사이드 플래그</strong>입니다. MCP shim의 env에 설정해도 동작하지 않습니다.</p>
+    <ul>
+      <li>Claude Code MCP 설정(<code>settings.json</code>)에서 <code>env</code>로 넣어도 서버가 읽지 않음</li>
+      <li>반드시 <code>~/.agentmemory/.env</code> 또는 프로젝트 루트 <code>.env</code>에 설정해야 함</li>
+      <li>이름/역할은 클라이언트 옵션처럼 보이지만 실제로는 서버 시작 시 읽는 값</li>
+    </ul>
+    <div class="callout warn">
+      <span class="icon">⚠</span><strong>혼동 주의 —</strong>
+      MCP 설정 파일이 아닌 <code>~/.agentmemory/.env</code>에 <code>AGENTMEMORY_TOOLS=all</code>을 추가한 뒤 데몬을 재시작해야 효과가 있습니다.
+    </div>
+  </div>
+</div>
+</section>
+
+
+</main>
+
+<script>
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var links = document.querySelectorAll('nav a[href^="#"]');
+  function onScroll() {
+    var y = window.scrollY + 100;
+    var cur = '';
+    sections.forEach(function(s) { if (s.offsetTop <= y) cur = s.id; });
+    links.forEach(function(l) {
+      l.classList.toggle('active', l.getAttribute('href') === '#' + cur);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+</body>
+</html>

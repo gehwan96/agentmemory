@@ -8,7 +8,7 @@ import type { EmbeddingProvider } from '../types.js'
 import { memoryToObservation } from '../state/memory-utils.js'
 import { recordAccessBatch } from './access-tracker.js'
 import { logger } from "../logger.js";
-import { expandProjectAliases, isPendingProject, expandWithPending } from "../mcp/project-aliases.js";
+import { expandProjectAliases } from "../mcp/project-aliases.js";
 
 let index: SearchIndex | null = null
 let vectorIndex: VectorIndex | null = null
@@ -281,6 +281,76 @@ export async function rebuildIndex(kv: StateKV): Promise<number> {
   return count
 }
 
+// Rebuild ONLY the vector index, leaving BM25 intact. Processes sessions
+// in a slice (fromIdx → fromIdx+limit) so the caller can paginate when
+// the total session count exceeds what fits in a single invocation timeout.
+export async function rebuildVectorsOnly(
+  kv: StateKV,
+  fromIdx = 0,
+  limitSessions = 60,
+): Promise<{ indexed: number; fromIdx: number; toIdx: number; totalSessions: number; vectorIndexSize: number }> {
+  const batchSize = getRebuildEmbedBatchSize()
+  type EmbedJob = {
+    id: string
+    sessionId: string
+    text: string
+    context: { kind: "memory" | "observation" | "synthetic"; logId: string }
+  }
+  const pending: EmbedJob[] = []
+  let indexed = 0
+
+  const flush = async (): Promise<void> => {
+    if (pending.length === 0) return
+    await vectorIndexAddBatchGuarded(pending)
+    pending.length = 0
+  }
+  const enqueue = async (job: EmbedJob): Promise<void> => {
+    pending.push(job)
+    if (pending.length >= batchSize) await flush()
+  }
+
+  const sessions = await kv.list<Session>(KV.sessions)
+  const slice = sessions.slice(fromIdx, fromIdx + limitSessions)
+
+  for (const session of slice) {
+    try {
+      const observations = await kv.list<CompressedObservation>(KV.observations(session.id))
+      for (const obs of observations) {
+        if (obs.title && obs.narrative) {
+          await enqueue({
+            id: obs.id,
+            sessionId: obs.sessionId,
+            text: obs.title + ' ' + obs.narrative,
+            context: { kind: "observation", logId: obs.id },
+          })
+          indexed++
+        }
+      }
+    } catch {
+      // best-effort per session
+    }
+  }
+
+  await flush()
+  return {
+    indexed,
+    fromIdx,
+    toIdx: fromIdx + slice.length,
+    totalSessions: sessions.length,
+    vectorIndexSize: vectorIndex?.size ?? 0,
+  }
+}
+
+export function registerRebuildVectorsFunction(sdk: ISdk, kv: StateKV): void {
+  sdk.registerFunction("mem::rebuild-vectors", async (data: { fromIdx?: number; limitSessions?: number }) => {
+    const fromIdx = typeof data?.fromIdx === "number" ? data.fromIdx : 0
+    const limitSessions = typeof data?.limitSessions === "number"
+      ? Math.min(data.limitSessions, 200)
+      : 60
+    return rebuildVectorsOnly(kv, fromIdx, limitSessions)
+  })
+}
+
 export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction(
     'mem::search',
@@ -291,6 +361,7 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
       cwd?: string
       format?: string
       token_budget?: number
+      verbose?: boolean
     }) => {
       const idx = getSearchIndex()
 
@@ -309,6 +380,7 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
       }
       const projectFilter = typeof data.project === 'string' && data.project.length > 0 ? data.project : undefined
       const cwdFilter = typeof data.cwd === 'string' && data.cwd.length > 0 ? data.cwd : undefined
+      const verbose = data.verbose === true
       const format = typeof data.format === 'string' ? data.format : 'full'
       if (!['full', 'compact', 'narrative'].includes(format)) {
         throw new Error("mem::search: format must be one of 'full', 'compact', or 'narrative'")
@@ -341,13 +413,12 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         return s ?? null
       }
 
-      // Expand projectFilter to include confirmed aliases + pending pair candidates.
+      // Expand projectFilter to include confirmed aliases only.
+      // Pending pairs are intentionally excluded: a pending suggestion is an
+      // unverified hypothesis, not a confirmed identity — including them would
+      // silently leak memories from sibling repos before a human approves.
       const projectAliasSet = projectFilter
-        ? new Set(
-            isPendingProject(projectFilter)
-              ? expandWithPending(projectFilter)
-              : expandProjectAliases(projectFilter),
-          )
+        ? new Set(expandProjectAliases(projectFilter))
         : null
 
       // First pass: filter by session or memory project (sequential — benefits from session cache).
@@ -480,13 +551,37 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         results: packed.items.length,
         hasProjectFilter: !!projectFilter,
         hasCwdFilter: !!cwdFilter,
+        droppedByFilter: filtering ? results.length - candidates.length : 0,
       })
-      return {
+
+      const base = {
         format,
         results: packed.items,
         tokens_used: packed.used,
         tokens_budget: tokenBudget,
         truncated: packed.truncated,
+      }
+
+      if (!verbose) return base
+
+      // Verbose debug: show filter stats and per-result project info.
+      // Useful for diagnosing why wrong-project results appear.
+      return {
+        ...base,
+        debug: {
+          bm25Top5: results.slice(0, 5).map((r) => ({
+            obsId: r.obsId,
+            sessionId: r.sessionId,
+            score: r.score,
+          })),
+          beforeFilter: filtering ? results.length : null,
+          afterFilter: filtering ? candidates.length : null,
+          droppedCount: filtering ? results.length - candidates.length : 0,
+          resultsWithProject: candidates.slice(0, 20).map((r) => ({
+            obsId: r.obsId,
+            project: sessionCache.get(r.sessionId)?.project ?? "(no session)",
+          })),
+        },
       }
     }
   )

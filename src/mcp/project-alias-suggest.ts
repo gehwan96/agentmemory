@@ -1,6 +1,7 @@
 import type { StateKV } from "../state/kv.js";
 import type { Session } from "../types.js";
 import { KV } from "../state/schema.js";
+import { basename } from "node:path";
 import {
   loadProjectAliases,
   loadPendingAliases,
@@ -8,6 +9,7 @@ import {
   savePendingAliases,
   resolveCanonicalProject,
   findConfidentMatch,
+  isAbsolutePath,
   tokenJaccard,
 } from "./project-aliases.js";
 import { randomUUID } from "node:crypto";
@@ -93,21 +95,41 @@ export async function suggestAliasIfNew(
       return;
     }
 
-    // 2. Jaccard similarity scan for pending suggestions.
+    // 2. Pending suggestions: basename match + Jaccard similarity.
+    //
+    // basename is a "weak" signal — two absolute paths sharing only their last
+    // segment might be completely different repos (e.g. /team-a/api vs
+    // /team-b/api).  We therefore add it as a pending suggestion that requires
+    // human approval rather than auto-confirming it as a confident alias.
     const store = loadPendingAliases();
     let changed = false;
     for (const candidate of candidates) {
       if (isRejectedPair(newProject, candidate)) continue;
       if (isPendingPair(newProject, candidate)) continue;
 
+      const signals: string[] = [];
+
+      // basename signal: both are absolute paths with the same last segment
+      if (
+        isAbsolutePath(newProject) &&
+        isAbsolutePath(candidate) &&
+        basename(newProject) === basename(candidate)
+      ) {
+        signals.push("basename");
+      }
+
       const score = tokenJaccard(newProject, candidate);
       if (score >= JACCARD_THRESHOLD) {
+        signals.push(`jaccard:${score.toFixed(2)}`);
+      }
+
+      if (signals.length > 0) {
         store.pending.push({
           id: randomUUID(),
           projectA: newProject,
           projectB: candidate,
           score,
-          signals: [`jaccard:${score.toFixed(2)}`],
+          signals,
           detectedAt: new Date().toISOString(),
         });
         changed = true;

@@ -17,7 +17,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, dirname, delimiter as PATH_DELIMITER } from "node:path";
+import { join, dirname, basename, delimiter as PATH_DELIMITER } from "node:path";
+import { readdir as readdirAsync } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { homedir, platform } from "node:os";
 import * as p from "@clack/prompts";
@@ -136,8 +137,11 @@ Commands:
   mcp                Start standalone MCP shim — opt-in surface for MCP-only clients
                      (Cursor, Gemini CLI, etc). REST always available at :3111.
   import-jsonl [p]   Import Claude Code JSONL transcripts (default: ~/.claude/projects)
-                     --max-files <N> | --max-files=<N>: override scan cap (default 200, max 1000;
-                     out-of-range is rejected; for trees >1000 files, batch by subdirectory)
+                     --max-files <N> | --max-files=<N>: override scan cap (default 200; no upper limit)
+                     --all: auto-split by subdirectory and import everything (recommended for large trees)
+  graph-extract      Extract knowledge graph from imported sessions
+                     --session <id>: process a single session only
+                     --batch-size <N>: observations per LLM call (default 20)
 
 Options:
   --help, -h         Show this help
@@ -158,6 +162,7 @@ Quick start:
   npx @agentmemory/agentmemory          # start with local iii-engine or Docker
   npx @agentmemory/agentmemory demo     # see semantic recall in 30 seconds
   npx @agentmemory/agentmemory doctor   # diagnose config + feature flags
+  npx @agentmemory/agentmemory diagnose # vector coverage + quality + isolation stats
   npx @agentmemory/agentmemory status   # health + memory count + flags
   npx @agentmemory/agentmemory upgrade  # upgrade agentmemory + iii runtime
   npx @agentmemory/agentmemory mcp      # standalone MCP server (no engine)
@@ -311,6 +316,98 @@ function findIiiConfig(): string {
     if (existsSync(c)) return c;
   }
   return "";
+}
+
+/**
+ * Read AGENTMEMORY_DATA_PATH from process.env or ~/.agentmemory/.env.
+ * Returns the resolved data directory (never ends with a separator).
+ *
+ * Default is ~/.agentmemory/data so the daemon can be started from any
+ * working directory and always finds the same store.  Set
+ * AGENTMEMORY_DATA_PATH in ~/.agentmemory/.env (or the environment) to
+ * point at an existing store in a non-default location.
+ */
+function resolveDataPath(): string | null {
+  // 1. Honour explicit env var already in process.env (e.g. from shell)
+  const fromEnv = process.env["AGENTMEMORY_DATA_PATH"];
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+
+  // 2. Read ~/.agentmemory/.env
+  const envFile = join(homedir(), ".agentmemory", ".env");
+  if (existsSync(envFile)) {
+    try {
+      const content = readFileSync(envFile, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx === -1) continue;
+        const key = trimmed.slice(0, eqIdx).trim();
+        if (key !== "AGENTMEMORY_DATA_PATH") continue;
+        const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, "");
+        if (val) return val;
+      }
+    } catch {
+      // best-effort
+    }
+  }
+  return null;
+}
+
+/**
+ * Rewrite relative ./data/... paths in the iii-config.yaml to absolute
+ * paths under dataDir.  Returns the path of the resolved config file
+ * (written alongside the store so it survives cross-directory restarts),
+ * or the original configPath when no rewrite is needed.
+ *
+ * This is the fix for the store-fragmentation problem: without absolute
+ * paths, the data directory is relative to wherever the CLI is run, which
+ * causes a new (empty) store to be created every time the daemon is started
+ * from a different working directory.
+ */
+function resolveIiiConfig(configPath: string): string {
+  const dataDir = resolveDataPath() ?? join(homedir(), ".agentmemory", "data");
+
+  let raw: string;
+  try {
+    raw = readFileSync(configPath, "utf-8");
+  } catch {
+    return configPath; // unreadable — let iii error naturally
+  }
+
+  // The directory that contains the original config (= the package root).
+  // We use this to absolutize the iii-exec worker path so iii-engine can
+  // find it regardless of where the resolved config is written.
+  const configDir = dirname(configPath);
+
+  // Replace relative data paths.  Use a specific pattern so we don't
+  // accidentally rewrite paths that were already made absolute.
+  let resolved = raw
+    .replace(/file_path:\s*\.\/data\/state_store\.db/, `file_path: ${join(dataDir, "state_store.db")}`)
+    .replace(/file_path:\s*\.\/data\/stream_store/, `file_path: ${join(dataDir, "stream_store")}`);
+
+  // Absolutize the exec worker path (e.g. "node dist/index.mjs" → absolute).
+  // The iii-exec worker is started with the config file's directory as CWD;
+  // when the resolved config is written to the data dir that path is wrong.
+  // configDir is already the dist/ folder (where iii-config.yaml lives after
+  // build), so index.mjs is a sibling — just join without an extra "dist/".
+  resolved = resolved.replace(
+    /- node dist\/index\.mjs/,
+    `- node ${join(configDir, "index.mjs")}`,
+  );
+
+  if (resolved === raw) return configPath; // already absolute or different layout
+
+  // Write next to the data directory so it is stable across cwd changes
+  try {
+    mkdirSync(dataDir, { recursive: true });
+    const out = join(dataDir, ".iii-config.resolved.yaml");
+    writeFileSync(out, resolved, "utf-8");
+    vlog(`resolved iii-config: ${out} (data: ${dataDir})`);
+    return out;
+  } catch {
+    return configPath; // fallback: use original
+  }
 }
 
 function whichBinary(name: string): string | null {
@@ -727,7 +824,10 @@ function startIiiBin(iiiBin: string, configPath: string): boolean {
 }
 
 async function startEngine(): Promise<boolean> {
-  const configPath = findIiiConfig();
+  const rawConfigPath = findIiiConfig();
+  // Rewrite relative data paths to absolute so the daemon uses the same
+  // store regardless of which directory the CLI is run from.
+  const configPath = rawConfigPath ? resolveIiiConfig(rawConfigPath) : rawConfigPath;
   let iiiBin = whichBinary("iii");
   vlog(`iii binary: ${iiiBin ?? "(not on PATH)"}, config: ${configPath || "(not found)"}`);
 
@@ -1189,6 +1289,97 @@ async function runStatus() {
     p.log.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
+}
+
+async function runDiagnose() {
+  p.intro("agentmemory diagnose");
+  const base = getBaseUrl();
+
+  const up = await isEngineRunning();
+  if (!up) {
+    p.log.error(`Not running — no response at ${base}`);
+    p.log.info("Start with: npx @agentmemory/agentmemory");
+    process.exit(1);
+  }
+
+  const data = await apiFetch<any>(base, "diagnose-report", 30000);
+  if (!data) {
+    p.log.error("diagnose-report endpoint did not respond. Engine may not have loaded yet.");
+    process.exit(1);
+  }
+
+  const { overview, compressionQuality, projectIsolation, recentSamples, health } = data;
+
+  // --- Index Coverage ---
+  const pct = overview.totalObservations > 0
+    ? Math.round((overview.vectorIndexSize / overview.totalObservations) * 100)
+    : 0;
+  const coverageBar = overview.embeddingProvider
+    ? `${overview.vectorIndexSize}/${overview.totalObservations} (${pct}%)`
+    : "N/A — no embedding provider configured";
+
+  const indexLines = [
+    `Sessions:          ${overview.sessionCount}`,
+    `Observations:      ${overview.totalObservations}`,
+    `Memories:          ${overview.memoryCount}`,
+    ``,
+    `Embedding provider: ${overview.embeddingProvider ?? "none (BM25-only)"}`,
+    `Embedding dims:     ${overview.embeddingDimensions ?? "—"}`,
+    `Vector index size:  ${overview.vectorIndexSize}`,
+    `Vector coverage:    ${coverageBar}`,
+  ];
+  p.note(indexLines.join("\n"), "Index Coverage");
+
+  // --- Compression Quality ---
+  const dist = (compressionQuality.distribution as Array<{ range: string; count: number }>)
+    .map((d) => `  ${d.range.padEnd(7)} ${d.count}`)
+    .join("\n");
+  const qualLines = [
+    `Sampled:  ${compressionQuality.sampledCount} observations`,
+    `Average:  ${compressionQuality.average}/100`,
+    `Median:   ${compressionQuality.median}/100`,
+    `Lowest:   ${compressionQuality.lowest}/100`,
+    ``,
+    `Distribution:`,
+    dist,
+  ];
+  p.note(qualLines.join("\n"), "Compression Quality");
+
+  // --- Project Isolation ---
+  const projects = (projectIsolation.projects as Array<{ project: string; obsCount: number }>)
+    .slice(0, 10)
+    .map((pr) => `  ${String(pr.obsCount).padStart(5)} obs  ${pr.project}`);
+  const isolLines = [
+    ...projects,
+    ``,
+    `Public entries (no project scope): ${projectIsolation.publicEntryCount}`,
+    `  → ratio: ${Math.round(projectIsolation.publicEntryRatio * 100)}% of memories`,
+    `  → these appear in ALL project searches`,
+  ];
+  p.note(isolLines.join("\n"), "Project Isolation");
+
+  // --- Recent Samples ---
+  const samples = (recentSamples as Array<{
+    title: string; qualityScore: number; project: string; timestamp: string; type: string;
+  }>).map((s) =>
+    `  [${String(s.qualityScore).padStart(3)}] ${s.type.padEnd(12)} ${s.title.slice(0, 60)}`,
+  );
+  if (samples.length > 0) {
+    p.note(["score  type         title", ...samples].join("\n"), "Recent Observations (latest 5)");
+  }
+
+  // --- Health ---
+  if (health.status === "ok") {
+    p.log.success("Health: OK — no issues detected");
+  } else {
+    p.log.warn("Health: WARNING");
+    for (const w of health.warnings as string[]) {
+      p.log.warn(`  → ${w}`);
+    }
+    p.log.info("Tip: run `mem search --verbose <query>` to debug specific recall issues");
+  }
+
+  p.outro("Done");
 }
 
 type DoctorCheck = { name: string; ok: boolean; hint?: string };
@@ -2261,10 +2452,15 @@ async function runImportJsonl(): Promise<void> {
   // 3112 into pathArg).
   const VALUE_FLAGS = new Set(["--port", "--tools"]);
   let maxFiles: number | undefined;
+  let importAll = false;
   const tail = args.slice(1);
   const positional: string[] = [];
   for (let i = 0; i < tail.length; i++) {
     const a = tail[i]!;
+    if (a === "--all") {
+      importAll = true;
+      continue;
+    }
     if (a === "--max-files") {
       const raw = tail[i + 1];
       const parsed = raw !== undefined ? parseInt(raw, 10) : NaN;
@@ -2321,15 +2517,117 @@ async function runImportJsonl(): Promise<void> {
     process.exit(1);
   }
 
-  const body: Record<string, unknown> = {};
-  if (pathArg) body["path"] = pathArg;
-  if (maxFiles !== undefined) body["maxFiles"] = maxFiles;
-
   const headers: Record<string, string> = { "content-type": "application/json" };
   const secret = process.env["AGENTMEMORY_SECRET"];
   if (secret) headers["authorization"] = `Bearer ${secret}`;
 
-  p.log.info(`Importing JSONL from ${pathArg || "~/.claude/projects"}…`);
+  if (importAll) {
+    const root = pathArg
+      ? (pathArg.startsWith("~") ? join(homedir(), pathArg.slice(1)) : pathArg)
+      : join(homedir(), ".claude", "projects");
+
+    let entries;
+    try {
+      entries = await readdirAsync(root, { withFileTypes: true });
+    } catch (err) {
+      p.log.error(`Cannot read directory ${root}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    const subdirs = entries
+      .filter((e) => e.isDirectory() && !e.isSymbolicLink())
+      .map((e) => join(root, e.name));
+
+    if (subdirs.length === 0) {
+      // Flat directory — fall back to single import against root itself
+      p.log.info(`No subdirectories found under ${root}; importing root directly…`);
+      const body: Record<string, unknown> = { path: root };
+      if (maxFiles !== undefined) body["maxFiles"] = maxFiles;
+      await runImportJsonlSingle(base, headers, body);
+      return;
+    }
+
+    p.log.info(`Scanning ${subdirs.length} project directories under ${root}…`);
+    const spinner = p.spinner();
+    spinner.start(`[0/${subdirs.length}] starting…`);
+
+    let totalImported = 0;
+    let totalObservations = 0;
+    let totalSessions = 0;
+    const truncatedDirs: string[] = [];
+    const failedDirs: string[] = [];
+
+    // Sequential — do NOT convert to Promise.all; each subdir resets the 30s function timeout.
+    for (let i = 0; i < subdirs.length; i++) {
+      const subdir = subdirs[i]!;
+      const subdirBody: Record<string, unknown> = { path: subdir };
+      if (maxFiles !== undefined) subdirBody["maxFiles"] = maxFiles;
+
+      try {
+        const res = await fetch(`${base}/agentmemory/replay/import-jsonl`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(subdirBody),
+          signal: AbortSignal.timeout(120_000),
+        });
+        const text = await res.text();
+        let json: { success?: boolean; imported?: number; sessionIds?: string[]; observations?: number; truncated?: boolean } = {};
+        if (text.length > 0) {
+          try { json = JSON.parse(text); } catch { /* non-JSON */ }
+        }
+        if (res.ok && json.success === true) {
+          const imp = json.imported ?? 0;
+          const obs = json.observations ?? 0;
+          const sess = json.sessionIds?.length ?? 0;
+          totalImported += imp;
+          totalObservations += obs;
+          totalSessions += sess;
+          if (json.truncated) truncatedDirs.push(basename(subdir));
+          spinner.message(`[${i + 1}/${subdirs.length}] ${basename(subdir)}: ${imp} file(s), ${obs} obs`);
+        } else {
+          failedDirs.push(basename(subdir));
+          spinner.message(`[${i + 1}/${subdirs.length}] ${basename(subdir)}: failed`);
+        }
+      } catch {
+        failedDirs.push(basename(subdir));
+        spinner.message(`[${i + 1}/${subdirs.length}] ${basename(subdir)}: error`);
+      }
+    }
+
+    const successCount = subdirs.length - failedDirs.length;
+    spinner.stop(
+      `Imported ${totalImported} file(s), ${totalObservations} observation(s) across ${totalSessions} session(s) in ${successCount}/${subdirs.length} project(s)`,
+    );
+    if (truncatedDirs.length > 0) {
+      const cap = maxFiles ?? 200;
+      p.log.warn(
+        `${truncatedDirs.length} project(s) hit the ${cap}-file scan cap: ${truncatedDirs.join(", ")}. ` +
+          `Re-run with --max-files=<higher> for those, or pass --all to a deeper root.`,
+      );
+    }
+    if (failedDirs.length > 0) {
+      p.log.warn(`${failedDirs.length} project(s) failed: ${failedDirs.join(", ")}`);
+      if (failedDirs.length === subdirs.length) process.exit(1);
+    }
+    if (totalSessions > 0) {
+      p.log.info(`View at ${getViewerUrl()} → Replay tab`);
+    }
+    return;
+  }
+
+  const body: Record<string, unknown> = {};
+  if (pathArg) body["path"] = pathArg;
+  if (maxFiles !== undefined) body["maxFiles"] = maxFiles;
+
+  await runImportJsonlSingle(base, headers, body);
+}
+
+async function runImportJsonlSingle(
+  base: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const pathLabel = (body["path"] as string | undefined) || "~/.claude/projects";
+  p.log.info(`Importing JSONL from ${pathLabel}…`);
   const spinner = p.spinner();
   spinner.start("scanning files");
 
@@ -2351,7 +2649,6 @@ async function runImportJsonl(): Promise<void> {
       truncated?: boolean;
       traversalCapped?: boolean;
       maxFiles?: number;
-      maxFilesUpperBound?: number;
     } = {};
     if (text.length > 0) {
       try {
@@ -2391,28 +2688,20 @@ async function runImportJsonl(): Promise<void> {
     );
     if (json.truncated) {
       const cap = json.maxFiles ?? 200;
-      const upper = json.maxFilesUpperBound ?? 1000;
       const discovered = json.discovered ?? 0;
       const skipped = discovered - (json.imported ?? 0);
       const discoveredLabel = json.traversalCapped
-        ? `${discovered}+ (traversal halted at safety cap)`
+        ? `${discovered}+ (traversal halted at internal safety cap)`
         : String(discovered);
       const baseMsg = `Hit the ${cap}-file scan cap; ${skipped} of ${discoveredLabel} discovered file(s) were skipped.`;
-      // If we already saw more than the server's hard cap (or the
-      // walker stopped early), bumping --max-files won't help on its
-      // own — recommend batching by subdirectory.
-      if (discovered > upper || json.traversalCapped) {
+      if (json.traversalCapped) {
         p.log.warn(
-          `${baseMsg} Tree exceeds the server's --max-files limit of ${upper}; ` +
-            `batch by subdirectory (run import-jsonl once per project under ~/.claude/projects).`,
+          `${baseMsg} Tree exceeded the internal traversal safety cap; use --all to auto-split by subdirectory.`,
         );
       } else {
-        const suggested = Math.min(
-          Math.max((discovered || cap) + 100, cap * 2),
-          upper,
-        );
+        const suggested = Math.max((discovered || cap) + 100, cap * 2);
         p.log.warn(
-          `${baseMsg} Re-run with --max-files=${suggested} (max ${upper}) or batch by subdirectory.`,
+          `${baseMsg} Re-run with --max-files=${suggested} or use --all to import everything automatically.`,
         );
       }
     }
@@ -2427,6 +2716,150 @@ async function runImportJsonl(): Promise<void> {
       p.log.error(err instanceof Error ? err.message : String(err));
     }
     process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `agentmemory graph-extract` — extract knowledge graph from imported sessions.
+//
+async function runGraphExtract(): Promise<void> {
+  const tail = args.slice(1);
+  let sessionFilter: string | undefined;
+  let batchSize = 20;
+
+  for (let i = 0; i < tail.length; i++) {
+    const a = tail[i]!;
+    if (a === "--session") {
+      sessionFilter = tail[i + 1];
+      i++;
+      continue;
+    }
+    if (a.startsWith("--batch-size=")) {
+      const n = parseInt(a.slice("--batch-size=".length), 10);
+      if (Number.isInteger(n) && n > 0) batchSize = n;
+      continue;
+    }
+    if (a === "--batch-size") {
+      const raw = tail[i + 1];
+      const n = raw !== undefined ? parseInt(raw, 10) : NaN;
+      if (Number.isInteger(n) && n > 0) { batchSize = n; } else if (raw !== undefined) {
+        p.log.warn(`Ignoring --batch-size ${raw}: expected a positive integer.`);
+      }
+      i++;
+      continue;
+    }
+  }
+
+  const port = getRestPort();
+  const base = `http://localhost:${port}`;
+
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${base}/agentmemory/livez`, { signal: AbortSignal.timeout(2000) });
+    probeOk = probe.ok;
+  } catch { /* falls through */ }
+  if (!probeOk) {
+    p.log.error(`agentmemory server not reachable on port ${port}. Start it first.`);
+    process.exit(1);
+  }
+
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const secret = process.env["AGENTMEMORY_SECRET"];
+  if (secret) headers["authorization"] = `Bearer ${secret}`;
+
+  // 1. Fetch session list
+  let sessions: Array<{ id: string }> = [];
+  try {
+    const res = await fetch(`${base}/agentmemory/replay/sessions`, { headers, signal: AbortSignal.timeout(30_000) });
+    const json = await res.json() as { sessions?: Array<{ id: string }> };
+    sessions = json.sessions ?? [];
+  } catch (err) {
+    p.log.error(`Failed to fetch sessions: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  if (sessionFilter) {
+    sessions = sessions.filter((s) => s.id === sessionFilter);
+    if (sessions.length === 0) {
+      p.log.error(`Session not found: ${sessionFilter}`);
+      process.exit(1);
+    }
+  }
+
+  if (sessions.length === 0) {
+    p.log.warn("No sessions found. Run import-jsonl first.");
+    return;
+  }
+
+  p.log.info(`Processing ${sessions.length} session(s) with batch-size=${batchSize}…`);
+  const spinner = p.spinner();
+  spinner.start(`[0/${sessions.length}] starting…`);
+
+  let totalNodes = 0;
+  let totalEdges = 0;
+  let totalBatches = 0;
+  const failedSessions: string[] = [];
+
+  for (let si = 0; si < sessions.length; si++) {
+    const sessionId = sessions[si]!.id;
+    spinner.message(`[${si + 1}/${sessions.length}] ${sessionId.slice(0, 16)}… fetching observations`);
+
+    let observations: unknown[] = [];
+    try {
+      const res = await fetch(
+        `${base}/agentmemory/observations?sessionId=${encodeURIComponent(sessionId)}`,
+        { headers, signal: AbortSignal.timeout(30_000) },
+      );
+      const json = await res.json() as { observations?: unknown[] };
+      observations = json.observations ?? [];
+    } catch {
+      failedSessions.push(sessionId);
+      continue;
+    }
+
+    if (observations.length === 0) continue;
+
+    // Process in batches — each batch is one LLM call
+    for (let bi = 0; bi < observations.length; bi += batchSize) {
+      const batch = observations.slice(bi, bi + batchSize);
+      try {
+        const res = await fetch(`${base}/agentmemory/graph/extract`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ observations: batch }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        const json = await res.json() as { success?: boolean; nodesAdded?: number; edgesAdded?: number; error?: string };
+        if (res.ok && json.success) {
+          totalNodes += json.nodesAdded ?? 0;
+          totalEdges += json.edgesAdded ?? 0;
+          totalBatches++;
+        } else {
+          if (json.error?.includes("not enabled") || json.error?.includes("Knowledge graph")) {
+            spinner.stop("stopped");
+            p.log.error(
+              "Knowledge graph extraction is not enabled. Set AGENTMEMORY_GRAPH_EXTRACTION=true and restart the server.",
+            );
+            process.exit(1);
+          }
+          failedSessions.push(sessionId);
+          break;
+        }
+      } catch {
+        failedSessions.push(sessionId);
+        break;
+      }
+    }
+
+    spinner.message(`[${si + 1}/${sessions.length}] ${sessionId.slice(0, 16)}… done (+${totalNodes} nodes)`);
+  }
+
+  const successCount = sessions.length - failedSessions.length;
+  spinner.stop(
+    `Extracted ${totalNodes} node(s), ${totalEdges} edge(s) across ${totalBatches} batch(es) from ${successCount}/${sessions.length} session(s)`,
+  );
+  if (failedSessions.length > 0) {
+    p.log.warn(`${failedSessions.length} session(s) failed. Re-run with --session <id> to retry individually.`);
   }
 }
 
@@ -2577,12 +3010,14 @@ const commands: Record<string, () => Promise<void>> = {
   connect: runConnectCmd,
   status: runStatus,
   doctor: runDoctor,
+  diagnose: runDiagnose,
   demo: runDemo,
   upgrade: runUpgrade,
   stop: runStop,
   remove: runRemove,
   mcp: runMcp,
   "import-jsonl": runImportJsonl,
+  "graph-extract": runGraphExtract,
 };
 
 const handler = commands[args[0] ?? ""] ?? main;

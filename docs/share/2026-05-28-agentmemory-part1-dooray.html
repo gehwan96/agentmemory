@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오픈소스 분해하기 - AgentMemory</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  background: #fafafa;
+  color: #1f2937;
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+/* ── Layout ── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 100px;
+}
+
+/* ── Hero ── */
+.series-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #4f46e5;
+  background: #eef2ff;
+  border-radius: 50px;
+  padding: 3px 12px;
+  margin-bottom: 16px;
+}
+h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1.25;
+  margin-bottom: 12px;
+}
+.hero-sub {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+.hero-meta {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ── Headings ── */
+h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 48px 0 14px;
+  padding-top: 4px;
+}
+h2 .num {
+  display: inline-block;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 1px 7px;
+  margin-right: 8px;
+  font-weight: 800;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 24px 0 8px;
+}
+
+p { margin: 12px 0; color: #374151; }
+ul, ol { margin: 10px 0 10px 22px; }
+li { margin: 5px 0; }
+a { color: #4f46e5; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Quote ── */
+.quote-box {
+  border-left: 4px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 20px 0;
+  font-size: .92rem;
+  color: #4b5563;
+}
+.quote-box .source {
+  font-size: .8rem;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+.quote-box .source a { color: #9ca3af; }
+.quote-box .source a:hover { color: #4f46e5; }
+
+/* ── Callout boxes ── */
+.callout {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 20px 0;
+  font-size: .92rem;
+  border-left: 4px solid;
+}
+.callout.insight {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #78350f;
+}
+.callout.insight::before { content: '💡 '; font-weight: 700; }
+.callout.key {
+  background: #eef2ff;
+  border-color: #4f46e5;
+  color: #312e81;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.callout.ok {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+}
+.callout.ok::before { content: '✅ '; font-weight: 700; }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; margin: 20px 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+th {
+  background: #f3f4f6;
+  padding: 9px 14px;
+  text-align: left;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 600;
+  color: #374151;
+}
+td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+td strong { color: #111827; }
+tr:hover td { background: #fafafa; }
+
+/* ── Code ── */
+code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .82rem;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #4f46e5;
+}
+pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 10px;
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .82rem;
+  line-height: 1.7;
+  margin: 16px 0;
+}
+pre .c { color: #6c7086; }
+pre .k { color: #cba6f7; }
+pre .s { color: #a6e3a1; }
+
+/* ── Step list ── */
+.step-list { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: .85rem;
+  margin-top: 2px;
+}
+.step-body h3 { margin: 0 0 4px; }
+.step-body p { margin: 0; }
+
+/* ── Checklist ── */
+.check-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: .88rem;
+}
+.check-icon { color: #10b981; font-weight: 700; flex-shrink: 0; }
+
+/* ── Divider ── */
+.divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 40px 0;
+}
+
+/* ── Layer stack ── */
+.layer-stack {
+  display: flex;
+  flex-direction: column;
+  margin: 20px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.layer-item:last-child { border-bottom: none; }
+.layer-badge {
+  flex-shrink: 0;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 9px;
+  min-width: 48px;
+  text-align: center;
+}
+.layer-item.l-schema { background: #fffbeb; }
+.layer-item.l-schema .layer-badge { background: #f59e0b; color: #fff; }
+.layer-item.l-wiki { background: #eef2ff; }
+.layer-item.l-wiki .layer-badge { background: #4f46e5; color: #fff; }
+.layer-item.l-source { background: #f9fafb; }
+.layer-item.l-source .layer-badge { background: #9ca3af; color: #fff; }
+.layer-body strong { font-size: .9rem; color: #111827; display: block; margin-bottom: 2px; }
+.layer-body span { font-size: .82rem; color: #6b7280; }
+
+/* ── Conclusion badge ── */
+.verdict {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin: 32px 0 0;
+}
+.verdict .v-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #6ee7b7;
+  margin-bottom: 8px;
+}
+.verdict p {
+  color: #e5e7eb;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.verdict strong { color: #fff; }
+</style>
+</head>
+<body>
+<div class="page" style="max-width:720px;margin:0 auto;">
+
+  <!-- ── Hero ── -->
+  <div class="series-tag">오픈소스 분해하기 - AgentMemory 시리즈 · 1편</div>
+  <h1>AgentMemory를 아시나요?</h1>
+
+
+  <!-- ── 1. karpathy ── -->
+  <h2>karpathy의 llm-wiki.md</h2>
+
+  <p>
+    Andrej Karpathy는 LLM을 쓸 때 느끼는 불편함 하나를 정직하게 짚었다.
+    매번 "이 코드베이스는 이런 구조야, 이런 컨벤션을 써, 이 서비스는 이렇게 연결돼 있어"를
+    반복해서 설명해야 한다는 것. 그래서 그가 만든 패턴이 <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f" target="_blank">llm-wiki.md</a>다.
+  </p>
+
+  <div class="quote-box">
+    "LLM이 관리하는 위키를 만들고, 새 정보가 들어올 때마다 LLM이 스스로 업데이트하게 한다.
+    사람은 소스를 골라주고, LLM은 요약·링킹·교차 참조의 보조 작업을 전담한다."
+    <div class="source">— <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f" target="_blank">karpathy / llm-wiki.md</a></div>
+  </div>
+
+  <p>구조는 세 계층이다. 사람이 소스를 넣으면 LLM이 위키를 갱신하고, 다음 질문 때 위키를 프롬프트 앞에 붙인다. 처음부터 다시 설명하지 않아도 된다.</p>
+
+  <div class="layer-stack">
+    <div class="layer-item l-schema">
+      <div class="layer-badge">규칙</div>
+      <div class="layer-body">
+        <strong>스키마 문서</strong>
+        <span>"어떤 정보를 어떻게 기록할지" — LLM이 위키를 관리하는 방식을 정의</span>
+      </div>
+    </div>
+    <div class="layer-item l-wiki">
+      <div class="layer-badge">위키</div>
+      <div class="layer-body">
+        <strong>LLM이 관리하는 위키</strong>
+        <span>마크다운 파일 묶음 — LLM이 자동으로 생성·갱신·교차 참조</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">소스</div>
+      <div class="layer-body">
+        <strong>원본 소스</strong>
+        <span>코드, 문서, 대화 — 수정하지 않는 원재료</span>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    RAG는 질문마다 원본 문서에서 답을 조합한다. 결과는 그때그때 사라진다. 다음 질문 때 다시 처음부터다.
+    llm-wiki는 다르다. LLM이 만든 요약, 교차 참조, 맥락을 위키 페이지로 남긴다.
+    쓸수록 쌓인다. Karpathy는 이걸 <em>persistent, compounding artifact</em>라고 표현했다.
+  </p>
+
+  <p>
+    그럼 왜 사람은 이걸 직접 안 했을까. 귀찮아서가 아니다. <br>
+    소스 하나를 추가하면 연관된 위키 페이지 10~15개를 동시에 고쳐야 한다.
+    이 갱신을 빠뜨리면 위키는 금방 낡고, 결국 아무도 믿지 않게 된다.
+    하지만 LLM은 이 작업을 실수 없이 해낸다. 
+  </p>
+
+  <div class="callout insight">
+    RAG는 매번 답을 새로 만든다. llm-wiki는 그 답을 남긴다.<br>
+    위키가 죽었던 건 의지 문제가 아니라 유지보수 비용이 감당 안 됐기 때문이다. LLM이 그걸 가져가면서 희망이 생겼다.
+  </div>
+
+
+  <!-- ── 2. rohitg00 ── -->
+  <h2><span class="num">2</span>llm-wiki의 한계 — 그래서 무엇이 더 필요한가</h2>
+
+  <p>
+    <a href="https://gist.github.com/rohitg00/2067ab416f7bbe447c1977edaaa681e2" target="_blank">rohitg00의 llm-wiki v2</a>는
+    이 패턴을 실제로 써보고 부딪힌 문제들을 솔직하게 정리한 글이다.
+  </p>
+
+  <h3>실제로 걸리는 세 가지</h3>
+
+  <ul>
+    <li>
+      <strong>소스 선별은 여전히 수동</strong> — llm-wiki가 자동화한 건 위키 갱신이지, 소스 수집이 아니다.
+      어떤 문서를 위키에 넣을지는 사람이 직접 판단해야 한다.
+      실제 개발 흐름에서는 이렇게 무너진다: 코드 리뷰를 끝내고 "나중에 위키에 넣어야지" 하다가 안 한다. 그걸로 끝이다.
+      소스 선별이 사람 손에 달려있는 한, 위키는 개발 습관에 종속된다. 바쁘면 바로 죽는 구조다.
+    </li>
+    <li>
+      <strong>검색 확장성</strong> — 페이지가 200~500개를 넘으면 단일 index.md 방식으로는 적절한 정보를
+      꺼내오기 어려워진다. 키워드 매칭만으로는 의미 기반 검색이 안 된다.
+    </li>
+    <li>
+      <strong>세션 간 자동 연결 없음</strong> — 어제 한 작업의 맥락이 오늘 세션에 자동으로 주입되지 않는다.
+      위키를 프롬프트 앞에 붙이는 것도 결국 사람이 기억해서 해야 한다.
+    </li>
+  </ul>
+
+  <h3>그가 원하는 것</h3>
+
+  <p>rohitg00이 v2에서 요구한 것들을 한 줄씩 정리하면:</p>
+
+  <div class="table-wrap">
+    <table style="table-layout:fixed">
+      <tr><th style="word-break:keep-all;overflow-wrap:break-word">영역</th><th style="word-break:keep-all;overflow-wrap:break-word">요구 사항</th></tr>
+      <tr><td style="word-break:keep-all;overflow-wrap:break-word">자동화</td><td style="word-break:keep-all;overflow-wrap:break-word">세션 종료 시 자동 압축·저장, 새 이벤트마다 자동 수집</td></tr>
+      <tr><td style="word-break:keep-all;overflow-wrap:break-word">수명주기</td><td style="word-break:keep-all;overflow-wrap:break-word">신뢰도 점수, 오래된 정보 자동 감쇠, 버전 관리</td></tr>
+      <tr><td style="word-break:keep-all;overflow-wrap:break-word">검색</td><td style="word-break:keep-all;overflow-wrap:break-word">BM25(키워드) + 벡터(의미) + 그래프 탐색의 하이브리드</td></tr>
+      <tr><td style="word-break:keep-all;overflow-wrap:break-word">격리</td><td style="word-break:keep-all;overflow-wrap:break-word">여러 프로젝트·작성자가 섞이지 않도록 프로젝트 단위 격리</td></tr>
+      <tr><td style="word-break:keep-all;overflow-wrap:break-word">보안</td><td style="word-break:keep-all;overflow-wrap:break-word">민감 데이터 자동 제거, 삭제 감사 로그</td></tr>
+    </table>
+  </div>
+
+  <p>
+    llm-wiki가 자동화한 건 절반이었다. 위키 갱신은 LLM이 하지만, 무엇을 넣을지는 여전히 사람 몫이다.
+    rohitg00이 원한 건 그 나머지 절반 — <em>소스 수집까지 자동화된 시스템</em>이다.
+  </p>
+
+
+  <!-- ── Bridge ── -->
+  <hr class="divider">
+
+  <p>
+    마침 그 자동화 시도 중 하나가 <strong>AgentMemory</strong>다. llm-wiki를 대체한다기보다,
+    사람이 직접 적기 어려운 부분을 자동으로 메워주는 보완재에 가깝다.
+  </p>
+
+  <div class="table-wrap">
+    <table style="table-layout:fixed">
+      <tr>
+        <th style="word-break:keep-all;overflow-wrap:break-word">영역</th>
+        <th style="word-break:keep-all;overflow-wrap:break-word">llm-wiki (수동)</th>
+        <th style="word-break:keep-all;overflow-wrap:break-word">AgentMemory (자동)</th>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><strong>작성 주체</strong></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">사람이 직접 소스를 넣음</td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">에이전트 훅이 자동으로 수집</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><strong>갱신 시점</strong></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">사람이 기억해서 실행할 때</td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">매 tool 호출 + 세션 종료</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><strong>회수 방식</strong></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">위키 파일을 프롬프트에 붙여넣기</td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">MCP 도구로 시맨틱 검색 + 자동 주입</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><strong>강점</strong></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">일관성·검증성 (사람이 검토함)</td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">자동성·세션 연속성 (개입 없이 동작)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><strong>약점</strong></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">유지보수 부담, 세션 연결 수동</td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">자동 압축의 품질이 모델에 의존</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout insight">
+    여기서 한 가지가 걸린다. "아무것도 하지 않아도 기억이 쌓인다"는 건, 뒤집으면
+    <em>검토하지 않은 정보가 자동으로 기억에 올라간다</em>는 뜻이기도 하다.
+    llm-wiki의 핵심 가치가 "사람이 검토한 정보만 남긴다"였던 걸 떠올리면, 자동 수집은 강점인 동시에 위험이다.<br>
+    rohitg00이 v2에서 요구한 <strong>신뢰도 점수·자동 감쇠</strong>가 바로 이 지점을 겨냥한 것이고,
+    AgentMemory도 메모리마다 <code>confidence</code> 값과 시간 감쇠(temporal decay)를 데이터 수명주기에 반영한다.
+    다만 그 자동 압축·감쇠가 정말 믿을 만한 기억을 남기는지는 써봐야 안다 — 그래서 2편에서 이 메커니즘을 직접 뜯어보고 검증한다.
+  </div>
+
+
+  <!-- ── 3. What is AgentMemory ── -->
+  <h2><span class="num">3</span>AgentMemory란?</h2>
+
+  <p>
+    AgentMemory는 Claude Code, Cursor, Codex 같은 AI 에이전트의
+    <strong>세션 간 기억을 지속시키는 MCP 서버</strong>다.
+    (MCP는 AI 도구가 외부 기능을 표준 규격으로 끌어다 쓰게 해주는 연결 방식이다.)
+    AI 에이전트는 세션이 끝나면 모든 맥락을 잊는다.
+    같은 프로젝트를 매번 처음부터 파악하는 낭비가 생기는 이유다.
+    AgentMemory는 에이전트가 파일을 읽고, 명령을 실행하고, 결정을 내릴 때마다
+    발생하는 이벤트를 자동으로 수집·압축·저장한다.
+    다음 세션에서는 관련 기억을 꺼내 쓰며 맥락을 이어간다.
+  </p>
+
+  <p>
+    내부적으로는 4계층의 데이터 모델을 사용한다.
+    <code>Session</code>(세션 단위 컨테이너) →
+    <code>RawObservation</code>(실시간 이벤트 캡처) →
+    <code>CompressedObservation</code>(LLM 압축 후 인덱싱) →
+    <code>Memory</code>(장기 기억 — 영속 저장).
+    위로 올라갈수록 더 요약되고 오래 보존된다.
+    여기서는 이 흐름의 전체 그림까지만 잡는다 — 각 계층이 실제로 어떤 스키마로 저장되고
+    어떻게 인덱싱·검색·감쇠되는지는 한 편 분량이 필요할 만큼 핵심이라, 2편에서 따로 뜯어본다.
+  </p>
+
+
+  <!-- ── 4. How it works ── -->
+  <h2><span class="num">4</span>어떻게 동작하나</h2>
+
+  <p>
+    에이전트가 일을 시작할 때부터 끝날 때까지, AgentMemory는 네 단계로 개입한다.
+    (여기서 "훅(hook)"은 세션 시작·도구 호출·종료 같은 특정 시점에 미리 걸어둔 코드가 자동 실행되는 연결 고리를 뜻한다.)
+  </p>
+
+  <div class="step-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>세션 시작 — 과거 기억 주입</h3>
+        <p>
+          Claude Code가 세션을 열면 <code>SessionStart</code> 훅이 AgentMemory에
+          <code>/session/start</code>를 호출한다.
+          <code>INJECT_CONTEXT=true</code> 설정이 켜져 있으면,
+          이 시점에 현재 프로젝트와 관련된 과거 기억을 자동으로 프롬프트에 주입한다.
+          사용자가 아무것도 하지 않아도 에이전트는 이미 "이 프로젝트를 아는 상태"로 시작한다.
+        </p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>작업 중 — 관련 기억 회수</h3>
+        <p>
+          사용자 프롬프트와 도구 호출이 일어나는 동안 에이전트는
+          <code>memory_recall</code> / <code>memory_smart_search</code> MCP 도구로
+          필요한 기억을 꺼낸다. BM25 키워드 검색과 벡터 시맨틱 검색을 결합한
+          하이브리드 방식이라 단순 키워드 매칭보다 정확하다.
+        </p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>작업 중 — 관찰 수집</h3>
+        <p>
+          <code>PostToolUse</code>, <code>PostToolUseFailure</code> 등 12개 훅이
+          모든 이벤트를 <code>/observe</code>로 전송한다.
+          중복 해시로 같은 이벤트는 걸러내고, 민감 데이터(토큰, 비밀번호 등)는
+          <code>stripPrivateData()</code>로 자동 제거한 뒤 KV 저장소에 쌓는다.
+        </p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>세션 종료 — 압축·저장</h3>
+        <p>
+          <code>Stop</code> 훅이 <code>mem::summarize</code>(map-reduce 요약)와
+          <code>mem::compress</code>(LLM 압축)를 호출한다.
+          이어서 <code>SessionEnd</code> 훅이 4단계 통합 파이프라인을 트리거해
+          단기 관찰을 장기 메모리로 증류한다. 각 단계가 하는 일은 한 줄로 이렇다 —
+          <strong>Semantic Merge</strong>(여러 세션에 흩어진 사실을 안정된 지식으로 병합) →
+          <strong>Reflect</strong>(2개 이상 기억에 걸친 패턴·원칙을 인사이트로 합성) →
+          <strong>Procedural</strong>(반복된 작업에서 "이럴 땐 이렇게" 절차를 추출) →
+          <strong>Graph</strong>(기억들 사이의 엔티티·관계를 시간 그래프로 연결).
+          각 단계의 내부 동작은 2편에서 자세히 다룬다.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key">
+    세션이 끝나면 잊는 대신, 끝날 때 압축해서 다음 세션이 꺼내 쓸 수 있는 형태로 남긴다.
+  </div>
+
+  <div class="callout insight">
+    정상 종료(<code>Stop</code> 훅)가 중요하다. 강제 종료하면 압축·저장 단계가 실행되지 않아
+    그 세션의 관찰 데이터가 장기 메모리로 올라가지 않는다. <code>Ctrl+C</code>가 아니라
+    에이전트를 정상적으로 종료하는 습관이 기억의 품질을 좌우한다.
+  </div>
+
+
+  <!-- ── 5. Install ── -->
+  <h2><span class="num">5</span>기초 설치 가이드</h2>
+
+  <p>세 단계면 연결까지 끝난다.</p>
+
+  <h3>1) 서버 실행</h3>
+<pre style="white-space:pre-wrap;overflow-x:auto">npm install -g @agentmemory/agentmemory
+agentmemory init       <span class="c"># ~/.agentmemory/.env 생성</span>
+agentmemory doctor     <span class="c"># 환경 변수 및 설정 점검</span>
+agentmemory start      <span class="c"># 포트 3111 (API), 3113 (웹 뷰어)</span></pre>
+
+  <p>설치 없이 바로 쓰려면: <code>npx @agentmemory/agentmemory</code></p>
+
+  <h3>2) 환경 변수 설정 — <code>~/.agentmemory/.env</code></h3>
+<pre style="white-space:pre-wrap;overflow-x:auto"><span class="c"># AI 제공자 셋 중 하나만 설정 (아래 우선순위 순)</span>
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GEMINI_API_KEY=...
+
+<span class="c"># 기본 8개 도구 → 전체 54개 노출</span>
+AGENTMEMORY_TOOLS=all</pre>
+
+  <div class="callout insight">
+    API 키가 없어도 서버는 실행된다. 단, LLM 압축과 시맨틱 검색이 비활성화되어
+    키워드 기반 합성 압축만 동작한다.
+  </div>
+
+  <h3>3) Claude Code에 등록</h3>
+<pre style="white-space:pre-wrap;overflow-x:auto">agentmemory connect claude-code <span class="c"># MCP 서버 등록</span>
+agentmemory connect claude-code --with-hooks  <span class="c"># 훅(자동 수집)까지</span></pre>
+
+  <h3>동작 확인 체크리스트</h3>
+  <div class="check-list">
+    <div class="check-item"><span class="check-icon">✓</span><span><code>http://localhost:3113</code> → 웹 뷰어가 열린다</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>agentmemory doctor</code> → 모든 항목 ✓</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>에이전트에서 <code>memory_sessions</code> 호출 → 오류 없이 반환됨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>AGENTMEMORY_TOOLS=all</code> 후 재시작 → 도구 목록이 8개에서 54개로 늘어남</span></div>
+  </div>
+
+
+  <!-- ── 6. Conclusion ── -->
+  <h2><span class="num">6</span>그래서 쓸 만한가?</h2>
+
+  <p>
+     이건 코드를 뜯어본 분석 단계의 결론이다 — 몇 주 직접 굴려본 실사용 후기는 시리즈 뒤 편에서 이야기할 계획이다.
+     그 전제 위에서 지금 내리는 판단은, <strong>"단순 설치로는 효과를 보지 못할것 같다"</strong>이다.
+      <br><br>"에이전트가 어제 한 일을 기억하게 한다"는 컨셉은 실용적이나 사용해본 결과 개인의 세션 사용 패턴, 압축 여부가 생각보다 중요해 보인다.
+  </p>
+
+  <p>
+    살짝 맛본 중간 후기론 agentmemory는 llm-wiki를 대체하진 않는다고 생각한다. 오히려 역할을 나누면 경계가 분명해지는 느낌이 든다.
+    틀리면 안 되는 정보(팀 합의 정책·검토된 결정)는 사람이 llm-wiki에,
+    일상 맥락·시행착오·세션 연속성은 agentmemory에 맡겨보면 어떨까? 라는 생각이 들어 조금 구조를 개선해 사용해보고자 한다. 
+    구체적인 한계 및 개선 내용은 시리즈 뒤편에서 정리한다.
+  </p>
+
+  <div class="verdict">
+    <div class="v-label">결론</div>
+    <p>
+      완벽한 시스템은 아니다. 한계도 분명히 있다.
+      그러나 <strong>"설치하고 훅만 연결하면, 내일부터 에이전트가 기억을 가진 채 일을 시작한다."</strong>
+      이 컨셉을 도입하는 것은 꽤나 괜찮아 보인다.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

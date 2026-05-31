@@ -33,6 +33,7 @@ import { registerDiskSizeManager } from "./functions/disk-size-manager.js";
 import { registerCompressFunction } from "./functions/compress.js";
 import {
   registerSearchFunction,
+  registerRebuildVectorsFunction,
   rebuildIndex,
   getSearchIndex,
   setVectorIndex,
@@ -41,6 +42,7 @@ import {
 import { registerContextFunction } from "./functions/context.js";
 import { registerSummarizeFunction } from "./functions/summarize.js";
 import { registerMigrateFunction } from "./functions/migrate.js";
+import { registerBackfillProjectFunction } from "./functions/backfill-project.js";
 import { registerFileIndexFunction } from "./functions/file-index.js";
 import { registerConsolidateFunction } from "./functions/consolidate.js";
 import { registerPatternsFunction } from "./functions/patterns.js";
@@ -72,6 +74,7 @@ import { registerSentinelsFunction } from "./functions/sentinels.js";
 import { registerSketchesFunction } from "./functions/sketches.js";
 import { registerCrystallizeFunction } from "./functions/crystallize.js";
 import { registerDiagnosticsFunction } from "./functions/diagnostics.js";
+import { registerDiagnoseReportFunction } from "./functions/diagnose.js";
 import { registerFacetsFunction } from "./functions/facets.js";
 import { registerVerifyFunction } from "./functions/verify.js";
 import { registerCascadeFunction } from "./functions/cascade.js";
@@ -211,9 +214,11 @@ async function main() {
   registerDiskSizeManager(sdk, kv);
   registerCompressFunction(sdk, kv, provider, metricsStore);
   registerSearchFunction(sdk, kv);
+  registerRebuildVectorsFunction(sdk, kv);
   registerContextFunction(sdk, kv, config.tokenBudget);
   registerSummarizeFunction(sdk, kv, provider, metricsStore);
   registerMigrateFunction(sdk, kv);
+  registerBackfillProjectFunction(sdk, kv);
   registerFileIndexFunction(sdk, kv);
   registerConsolidateFunction(sdk, kv, provider);
   registerPatternsFunction(sdk, kv);
@@ -286,6 +291,7 @@ async function main() {
   registerSketchesFunction(sdk, kv);
   registerCrystallizeFunction(sdk, kv, provider);
   registerDiagnosticsFunction(sdk, kv);
+  registerDiagnoseReportFunction(sdk, kv, vectorIndex, embeddingProvider);
   registerFacetsFunction(sdk, kv);
   registerVerifyFunction(sdk, kv);
   registerLessonsFunctions(sdk, kv);
@@ -333,8 +339,11 @@ async function main() {
     graphWeight,
   );
 
-  registerSmartSearchFunction(sdk, kv, (query, limit) =>
-    hybridSearch.search(query, limit),
+  registerSmartSearchFunction(
+    sdk,
+    kv,
+    (query, limit) => hybridSearch.search(query, limit),
+    (query, limit) => hybridSearch.searchVerbose(query, limit),
   );
 
   registerApiTriggers(sdk, kv, secret, metricsStore, provider);
@@ -481,7 +490,7 @@ async function main() {
     `Ready. ${embeddingProvider ? "Triple-stream (BM25+Vector+Graph)" : "BM25+Graph"} search active.`,
   );
   bootLog(
-    `REST API: 124 endpoints at http://localhost:${config.restPort}/agentmemory/*`,
+    `REST API: 127 endpoints at http://localhost:${config.restPort}/agentmemory/*`,
   );
   bootLog(
     `MCP surface (opt-in via \`npx @agentmemory/mcp\`): ${getAllTools().length} tools · 6 resources · 3 prompts`,

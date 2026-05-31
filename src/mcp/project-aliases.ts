@@ -152,7 +152,7 @@ export function normalizeForCompare(name: string): string {
   return name.toLowerCase().replace(/[\s\-_./]+/g, "");
 }
 
-function isAbsolutePath(name: string): boolean {
+export function isAbsolutePath(name: string): boolean {
   return name.startsWith("/") || /^[A-Za-z]:[\\/]/.test(name);
 }
 
@@ -171,13 +171,11 @@ export function findConfidentMatch(
       return { signal: "normalize", matched: ex };
     }
 
-    // 2. Both absolute paths: basename identical
+    // 2. Both absolute paths: realpath identical (basename alone is NOT sufficient —
+    //    two different repos that happen to share a name, e.g. "api", would be
+    //    silently merged; basename is demoted to a pending suggestion instead,
+    //    see suggestAliasIfNew in project-alias-suggest.ts)
     if (isAbsolutePath(newProject) && isAbsolutePath(ex)) {
-      if (basename(newProject) === basename(ex)) {
-        return { signal: "basename", matched: ex };
-      }
-
-      // 3. Both absolute paths: realpath identical
       try {
         if (realpathSync(newProject) === realpathSync(ex)) {
           return { signal: "realpath", matched: ex };

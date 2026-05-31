@@ -39,6 +39,49 @@ export class HybridSearch {
     return this.tripleStreamSearch(query, limit);
   }
 
+  async searchVerbose(
+    query: string,
+    limit = 20,
+  ): Promise<{
+    results: HybridSearchResult[];
+    debug: {
+      bm25Top5: Array<{ obsId: string; sessionId: string; score: number }>;
+      vectorTop5: Array<{ obsId: string; sessionId: string; score: number }>;
+      hasEmbeddingProvider: boolean;
+      hasVectorIndex: boolean;
+      vectorIndexSize: number;
+    };
+  }> {
+    // Run the full pipeline + a separate shallow scan for debug scores.
+    // The BM25 search is synchronous and cheap; the vector embed is one
+    // extra call — acceptable overhead for an explicitly verbose request.
+    const [results, bm25Top5Raw] = await Promise.all([
+      this.tripleStreamSearch(query, limit),
+      Promise.resolve(this.bm25.search(query, 5)),
+    ]);
+
+    let vectorTop5: Array<{ obsId: string; sessionId: string; score: number }> = [];
+    if (this.vector && this.embeddingProvider && this.vector.size > 0) {
+      try {
+        const qEmbed = await this.embeddingProvider.embed(query);
+        vectorTop5 = this.vector.search(qEmbed, 5);
+      } catch {
+        // best-effort
+      }
+    }
+
+    return {
+      results,
+      debug: {
+        bm25Top5: bm25Top5Raw.slice(0, 5),
+        vectorTop5,
+        hasEmbeddingProvider: this.embeddingProvider !== null,
+        hasVectorIndex: this.vector !== null && this.vector.size > 0,
+        vectorIndexSize: this.vector?.size ?? 0,
+      },
+    };
+  }
+
   async searchWithExpansion(
     query: string,
     limit: number,

@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentMemory 심층 분석</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+td, th { word-break: keep-all; overflow-wrap: break-word; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  background: #fafafa;
+  color: #1f2937;
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+/* ── Layout ── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 100px;
+}
+
+/* ── Hero ── */
+.series-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #4f46e5;
+  background: #eef2ff;
+  border-radius: 50px;
+  padding: 3px 12px;
+  margin-bottom: 16px;
+}
+h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1.25;
+  margin-bottom: 12px;
+}
+.hero-sub {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+.hero-meta {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ── Headings ── */
+h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 48px 0 14px;
+  padding-top: 4px;
+}
+h2 .num {
+  display: inline-block;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 1px 7px;
+  margin-right: 8px;
+  font-weight: 800;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 24px 0 8px;
+}
+
+p { margin: 12px 0; color: #374151; }
+ul, ol { margin: 10px 0 10px 22px; }
+li { margin: 5px 0; }
+a { color: #4f46e5; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Quote ── */
+.quote-box {
+  border-left: 4px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 20px 0;
+  font-size: .92rem;
+  color: #4b5563;
+}
+.quote-box .source {
+  font-size: .8rem;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+/* ── Callout boxes ── */
+.callout {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 20px 0;
+  font-size: .92rem;
+  border-left: 4px solid;
+}
+.callout.insight {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #78350f;
+}
+.callout.insight::before { content: '💡 '; font-weight: 700; }
+.callout.key {
+  background: #eef2ff;
+  border-color: #4f46e5;
+  color: #312e81;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.callout.ok {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+}
+.callout.ok::before { content: '✅ '; font-weight: 700; }
+
+/* ── High 한계 카드 ── */
+.callout.high {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #1f2937;
+}
+.callout.high .h-tag {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #d97706;
+  margin-bottom: 6px;
+}
+.callout.high h3 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: .95rem;
+  font-weight: 700;
+}
+.callout.high .h-risk {
+  font-weight: 600;
+  color: #92400e;
+  margin: 0 0 6px;
+  font-size: .9rem;
+}
+.callout.high .h-relief {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #fde68a;
+  font-size: .85rem;
+  color: #78350f;
+}
+.callout.high code {
+  background: #fef3c7;
+  color: #92400e;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .78rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; margin: 20px 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+th {
+  background: #f3f4f6;
+  padding: 9px 14px;
+  text-align: left;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 600;
+  color: #374151;
+}
+td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+td strong { color: #111827; }
+tr:hover td { background: #fafafa; }
+
+/* ── Code ── */
+code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .82rem;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #4f46e5;
+}
+pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 10px;
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .82rem;
+  line-height: 1.7;
+  margin: 16px 0;
+}
+pre .c { color: #6c7086; }
+pre .k { color: #cba6f7; }
+pre .s { color: #a6e3a1; }
+
+/* ── Step list ── */
+.step-list { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: .85rem;
+  margin-top: 2px;
+}
+.step-body h3 { margin: 0 0 4px; }
+.step-body p { margin: 0; }
+
+/* ── Checklist ── */
+.check-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: .88rem;
+}
+.check-icon { color: #10b981; font-weight: 700; flex-shrink: 0; }
+.check-body h3 { margin: 0 0 2px; font-size: .9rem; color: #111827; }
+.check-body p { margin: 0; color: #4b5563; font-size: .85rem; }
+.check-body .ref { margin-top: 4px; font-size: .78rem; color: #9ca3af; }
+
+/* ── Divider ── */
+.divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 40px 0;
+}
+
+/* ── Layer stack ── */
+.layer-stack {
+  display: flex;
+  flex-direction: column;
+  margin: 20px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.layer-item:last-child { border-bottom: none; }
+.layer-badge {
+  flex-shrink: 0;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 9px;
+  min-width: 48px;
+  text-align: center;
+}
+.layer-item.l-schema { background: #fffbeb; }
+.layer-item.l-schema .layer-badge { background: #f59e0b; color: #fff; }
+.layer-item.l-wiki { background: #eef2ff; }
+.layer-item.l-wiki .layer-badge { background: #4f46e5; color: #fff; }
+.layer-item.l-source { background: #f9fafb; }
+.layer-item.l-source .layer-badge { background: #9ca3af; color: #fff; }
+.layer-item.l-green { background: #ecfdf5; }
+.layer-item.l-green .layer-badge { background: #10b981; color: #fff; }
+.layer-body strong { font-size: .9rem; color: #111827; display: block; margin-bottom: 2px; }
+.layer-body span { font-size: .82rem; color: #6b7280; }
+
+/* ── Conclusion badge ── */
+.verdict {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin: 32px 0 0;
+}
+.verdict .v-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #6ee7b7;
+  margin-bottom: 8px;
+}
+.verdict p {
+  color: #e5e7eb;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.verdict strong { color: #fff; }
+
+/* ── Diagram placeholder ── */
+.diagram-slot {
+  margin: 20px 0;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: .85rem;
+}
+.diagram-slot code { background: #f3f4f6; color: #6b7280; font-size: .78rem; }
+</style>
+</head>
+<body>
+<div class="page" style="max-width:720px;margin:0 auto;">
+
+  <!-- ── Hero ── -->
+  <div class="series-tag">오픈소스 분해하기 - AgentMemory 시리즈 · 2편</div>
+  <h1>AgentMemory 심층 분석</h1>
+  <!-- ── 독자 안내 ── -->
+  <p>1편에서는 AgentMemory가 등장한 배경, 세션 흐름의 큰 그림, 기초 설치 방법을 다뤘다. 2편은 그 안을 열어본다. 아키텍처가 어떤 레이어로 나뉘는지, 데이터가 어떤 형태로 변환·저장·검색되는지, 세션이 시작부터 종료까지 어떤 단계를 밟는지를 코드 레벨로 설명한다.</p>
+  <p>이 글을 읽고 나면 "기억이 왜 이렇게 동작하지?"라는 질문의 대부분에 직접 답할 수 있게 된다. 직접 설치·운영을 고려 중인 개발자를 대상으로 하며, 소스를 직접 들여다본 내용을 바탕으로 한다.</p>
+
+  <!-- ── 1. 전체 아키텍처 ── -->
+  <h2><span class="num">1</span>전체 아키텍처</h2>
+
+  <p>
+    AgentMemory는 세 레이어로 구성된다. Claude Code 훅이 이벤트를 보내면,
+    AgentMemory Daemon이 비즈니스 로직을 처리하고, iii-engine이 실제 저장을 담당한다.
+    각 레이어는 명확히 분리돼 있어 하나가 바뀌어도 나머지에 영향이 없다.
+  </p>
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/1.architecture-diagram.png" alt="3-레이어 구조 — 훅 → 데몬 → iii-engine" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+
+  <h3>3-레이어 구조</h3>
+  <p>이벤트는 Claude Code Hook → AgentMemory Daemon → iii-engine 순으로 흐른다. <br>Claude Code Hook은 정보를 전달하고, AgentMemory Daemon은 판단하고, iii-engine은 저장한다.</p>
+  <div class="step-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Claude Code Hook</h3>
+        <p><code>SessionStart</code>, <code>PostToolUse</code>, <code>Stop</code> 등 12개 훅이 이벤트 발생 시 AgentMemory Daemon에 HTTP 요청을 보낸다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>AgentMemory Daemon (:3111)</h3>
+        <p>비즈니스 로직 전담. 관측 수집, 압축(옵션: 외부 LLM), 기억 회수, 세션 요약, 4-tier 통합 파이프라인을 처리한다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>iii-engine 워커들</h3>
+        <p>
+          <strong>iii</strong>는 AgentMemory가 그 위에서 도는 런타임 플랫폼이다(npm 패키지 <code>iii-sdk</code> · 별도 <code>iii</code> 바이너리).
+          보통은 웹 서버·DB·캐시·스케줄러·관측 도구를 따로 깔아야 하는데, iii는 이것들을
+          <strong>워커(독립 실행 단위)</strong>라는 한 가지 형태로 묶어 단일 <code>iii</code> 프로세스 안에서 함께 띄운다.
+        </p>
+        <p>
+          AgentMemory Daemon은 별도 Node 프로세스로 비즈니스 로직만 맡고, 저장·조회·이벤트 흐름은 전부 iii 워커에 위임한다.
+          처음 알아둘 워커는 둘이다 <br><strong><code>iii-state</code></strong>는 모든 데이터의 진짜 저장소(KV),
+          <strong><code>iii-stream</code></strong>은 화면 표시용 실시간 사본이다.
+          나머지 워커(큐·이벤트·스케줄·로깅)는 배관이라 아래 전체 목록에서 한 번에 보면 된다.
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  <h3>iii-engine 워커 구성 (v0.11.2)</h3>
+  <p>워커 8종과 디스크 저장소 2개의 전체 목록이다. iii-state·iii-stream이 데이터를 맡고, 나머지는 배관 역할을 한다.</p>
+
+  <div class="layer-stack">
+    <div class="layer-item l-wiki">
+      <div class="layer-badge">HTTP</div>
+      <div class="layer-body">
+        <strong>iii-http (:3111)</strong>
+        <span>AgentMemory Daemon이 쓰는 REST 엔드포인트</span>
+      </div>
+    </div>
+    <div class="layer-item l-wiki">
+      <div class="layer-badge">KV</div>
+      <div class="layer-body">
+        <strong>iii-state</strong>
+        <span>Key-Value(키-값 쌍으로 저장하는 구조) 저장 워커 → <code>state_store.db</code> (진실의 원천)</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">Stream</div>
+      <div class="layer-body">
+        <strong>iii-stream (:3112)</strong>
+        <span>Viewer가 소비하는 실시간 라이브 테이프 → <code>stream_store</code> (파생/휘발성)</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">Queue</div>
+      <div class="layer-body">
+        <strong>iii-queue</strong>
+        <span>내장 큐 — 비동기 작업 버퍼</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">PubSub</div>
+      <div class="layer-body">
+        <strong>iii-pubsub</strong>
+        <span>로컬 durable 이벤트 브로커</span>
+      </div>
+    </div>
+    <div class="layer-item l-schema">
+      <div class="layer-badge">Cron</div>
+      <div class="layer-body">
+        <strong>iii-cron</strong>
+        <span>cron 트리거용 워커 — yaml엔 활성이지만 AgentMemory는 실제로 사용 안 함. 주기 작업(2h consolidation · 1h auto-forget · 24h decay)은 데몬 <code>setInterval</code>이 담당. · <code>src/index.ts:499-538</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">Obs</div>
+      <div class="layer-body">
+        <strong>iii-observability</strong>
+        <span>traces / logs 수집</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">Exec</div>
+      <div class="layer-body">
+        <strong>iii-exec</strong>
+        <span><code>node dist/index.mjs</code> — 데몬 프로세스 실행</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>데이터 모델 4계층</h3>
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/3.data-model.png" alt="Session → RawObservation → CompressedObservation → Memory 4계층" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+  <p>
+    1편에서 잠깐 등장한 4계층 구조와 압축 신뢰 메커니즘을 여기서 본격적으로 다룬다. 이벤트가 처음 들어올 때부터 장기 지식이 될 때까지, 데이터는 4계층을 거친다.<strong>이 중, CompressedObservation이 핵심이다.</strong>
+    검색·세션 요약·그래프 추출·4-tier 통합 파이프라인이 모두 이 형태를 다시 읽는다.
+    초기 압축 품질이 이후 모든 단계의 품질을 결정한다.
+  </p>
+
+  <div class="step-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Session <span style="font-weight:400;color:#9ca3af;font-size:.85rem;">— 임시</span></h3>
+        <p>세션 단위 컨테이너. 시작 시 생성, 종료 시 파생 데이터 생성 후 유지.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>RawObservation <span style="font-weight:400;color:#9ca3af;font-size:.85rem;">— 캡처</span></h3>
+        <p>훅이 보낸 이벤트 원본. dedup(중복 제거) 해시 처리 후 KV에 즉시 저장. 압축 후 CompressedObservation으로 대체된다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>CompressedObservation <span style="font-weight:400;color:#9ca3af;font-size:.85rem;">— 인덱싱</span></h3>
+        <p>합성(기본) 또는 외부 LLM 압축을 거친 형태다. <strong>합성 압축</strong>은 외부 LLM 없이 동작하는 규칙 기반 처리다 — tool 이름·파일 경로·결과를 템플릿으로 조합해 구조화된 텍스트를 만든다. 이 형태가 곧 검색의 기본 단위다. BM25·384차원 벡터 인덱스에 올라간다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>Memory <span style="font-weight:400;color:#9ca3af;font-size:.85rem;">— 영속</span></h3>
+        <p>통합·감쇠를 거친 장기 지식. 4종으로 나뉜다.</p>
+        <p style="margin-top:8px;font-size:.88rem;color:#4b5563;line-height:1.7;">
+          <strong style="color:#374151;">Semantic</strong> — 반복 관찰된 사실의 합산. 같은 내용이 여러 세션에서 등장할수록 confidence가 강화된다.<br>
+          <strong style="color:#374151;">Procedural</strong> — 반복 패턴에서 추출한 작업 루틴·절차.<br>
+          <strong style="color:#374151;">Insight</strong> — 지식 그래프 클러스터에서 뽑아낸 고차원 교훈. 24시간마다 강도(strength)가 점진적으로 감쇠한다.<br>
+          <strong style="color:#374151;">Crystal</strong> — 세션 단위 스냅샷. Claude가 수행한 tool 호출 연쇄(Action 체인)에서 건드린 파일·툴·교훈을 하나로 패키징한 구조화 요약.
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+
+  <h3>KV 스코프 — <code>state_store.db</code></h3>
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/8.storage.png" alt="state_store.db KV 스코프 — AgentMemory → iii-state 위임" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p>iii-state가 보관하는 데이터는 스코프(접두어)로 나뉜다. 세션·관측·메모리·요약·그래프·인덱스가 각자 자리를 갖는다.</p>
+
+  <div class="table-wrap">
+    <table style="table-layout:fixed">
+      <tr>
+        <th style="word-break:keep-all;overflow-wrap:break-word;width:44%">스코프</th>
+        <th style="word-break:keep-all;overflow-wrap:break-word">용도</th>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:sessions</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">세션 목록 및 메타데이터</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:obs:{sessionId}</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">CompressedObservation 목록 (RawObs를 덮어씀)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:memories</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">장기 메모리 엔트리</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:summaries</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">SessionSummary (세션 종료 시 생성)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:semantic</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">Tier 1 Semantic Memory — 반복 사실 통합</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:procedural</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">Tier 3 Procedural Memory — 패턴 절차</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:insights</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">Tier 2 Reflect 결과 (24시간 decay)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:graph:nodes / :edges</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">지식 그래프 (세션 종료 시 생성)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:index:bm25</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">BM25 + 벡터 인덱스 블롭 (5초 디바운스로 갱신)</td>
+      </tr>
+      <tr>
+        <td style="word-break:keep-all;overflow-wrap:break-word"><code>mem:crystals</code></td>
+        <td style="word-break:keep-all;overflow-wrap:break-word">Crystal — Action 체인 요약 스냅샷 (세션 종료 시 생성)</td>
+      </tr>
+    </table>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ── 2. 세션 수명주기 ── -->
+  <h2><span class="num">2</span>세션 수명주기</h2>
+
+  <h3>세션 전체 흐름 — 6단계</h3>
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/9.total-flow.png" alt="세션 6단계 전체 흐름" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p> 세션 시작(과거 기억 주입)부터 매 tool 호출 관측, 검색, 종료 시 파생 생성, 통합, 영속 지식 베이스 적재까지 6단계로 이어진다.</p>
+
+  <div class="step-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>SessionStart</h3>
+        <p><code>/session/start</code>로 Session KV를 생성한다. <code>AGENTMEMORY_INJECT_CONTEXT=true</code>이면 과거 기억을 recall해 stdout에 주입한다. 이때 TOKEN_BUDGET 2000 안에서 Lesson + SessionSummary + 중요 관측을 조합한다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>PostToolUse — 매 tool 호출</h3>
+        <p><code>/observe</code>가 호출되면 다음 순서로 처리한다.</p>
+        <ol>
+          <li><strong>dedup</strong> — 동일 이벤트는 해시로 걸러 중복 저장 방지</li>
+          <li><strong>privacy strip</strong> — 13개 패턴으로 API 키·토큰 자동 제거</li>
+          <li><strong>관측 상한 체크</strong> — 500건 초과 시 쓰기 차단 (기존 데이터 삭제 아님)</li>
+          <li><strong>압축</strong> — 기본값은 합성 압축(zero-LLM, 로컬). <code>AGENTMEMORY_AUTO_COMPRESS=true</code> + provider 키 설정 시 외부 LLM API로 압축</li>
+          <li><strong>인덱싱</strong> — BM25 + 384차원 벡터 인덱스 갱신</li>
+          <li><strong>stream_store 발행</strong> — Viewer 실시간 표시용 파생 스트림</li>
+        </ol>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>smart-search (요청 시)</h3>
+        <p>BM25·벡터·그래프 검색 결과를 RRF(Reciprocal Rank Fusion)로 융합한다. 세션당 최대 3개 결과를 반환하며 project로 격리된다. 상세 수식과 가중치 튜닝은 섹션 4를 참조한다.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>Stop → SessionEnd</h3>
+        <p>4종 파생 데이터(요약·그래프·교훈·통합)를 병렬로 생성한다. <strong>정상 종료해야만 실행된다.</strong></p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h3>4-tier Consolidation</h3>
+        <p>세션 종료 즉시, 그리고 매 2시간마다 자동 실행된다. Semantic Merge → Reflect → Procedural → Decay 순서로 돈다. <code>consolidation-pipeline.ts:50</code>.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h3>영속 지식 베이스</h3>
+        <p><code>state_store.db</code> — Semantic, Procedural, Insight, Crystal이 여기에 쌓인다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>즉시 영속되는 것 — 세션 종료와 무관</h3>
+
+  <p> 아래 항목들은 세션이 끝나기를 기다리지 않고 그때그때 영속된다.</p>
+
+  <div class="check-list">
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>RawObservation → KV 저장</h3>
+        <p>훅 이벤트마다 즉시 <code>mem:obs:{sessionId}</code>에 저장한다.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>압축 → CompressedObservation</h3>
+        <p><strong>기본값(<code>false</code>)은 합성 압축(zero-LLM, 로컬)</strong>. provider 키 + <code>true</code> 설정 시에만 외부 LLM API로 압축.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>BM25 + 384-dim 벡터 인덱싱</h3>
+        <p>압축 후 <code>mem:index:bm25</code>와 벡터 인덱스를 갱신한다.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>stream_store 발행</h3>
+        <p>Viewer 실시간 표시용 파생 스트림이다. 진실의 원천이 아니다.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3><code>memory_save</code> (MCP) → <code>mem:memories</code></h3>
+        <p>사용자가 직접 호출하는 MCP tool. 세션과 무관하게 즉시 <code>mem:memories</code>에 저장·인덱싱 · 내부 핸들러 <code>mem::remember</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>세션 종료 시에만 생성되는 파생 데이터</h3>
+
+  <p> 아래 항목들은 Stop → SessionEnd 때만 생성된다.</p>
+
+  <div class="layer-stack">
+    <div class="layer-item l-schema">
+      <div class="layer-badge">요약</div>
+      <div class="layer-body">
+        <strong>SessionSummary</strong>
+        <span>최근 압축 관측을 요약 · <code>mem::summarize</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-schema">
+      <div class="layer-badge">그래프</div>
+      <div class="layer-body">
+        <strong>노드 / 엣지</strong>
+        <span>압축 관측의 title·concepts·files에서 관계 추출 · <code>mem::graph-extract</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-schema">
+      <div class="layer-badge">교훈</div>
+      <div class="layer-body">
+        <strong>lesson / insight</strong>
+        <span>패턴을 분석해 <code>mem:insights</code>에 저장 (24h decay) · <code>mem::slot-reflect</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-schema">
+      <div class="layer-badge">통합</div>
+      <div class="layer-body">
+        <strong>4-tier 통합 실행</strong>
+        <span>세션 종료 즉시 실행 (<code>CONSOLIDATION_ENABLED=true</code>) · <code>mem::consolidate-pipeline</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-green">
+      <div class="layer-badge">Crystal</div>
+      <div class="layer-body">
+        <strong>Crystal 스냅샷 → <code>mem:crystals</code></strong>
+        <span>완료된 Action 체인을 요약해 저장 (<code>CONSOLIDATION_ENABLED=true</code>) · <code>mem::auto-crystallize</code></span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">상태</div>
+      <div class="layer-body">
+        <strong>Session KV — <code>status: "completed"</code> / <code>endedAt</code> 기록</strong>
+        <span>stale-session 판별과 Viewer 표시의 기준이 된다.</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ── 3. 압축·요약·그래프·통합 ── -->
+  <h2><span class="num">3</span>압축·요약·그래프·통합: 관측이 지식이 되는 과정</h2>
+  <p>이벤트가 들어온 직후부터 세션 종료까지, 데이터가 어떻게 가공·파생되고 장기 지식으로 통합되는지를 그림으로 정리했다.</p>
+
+  <p>관측 본문을 검색 가능한 형태로 줄이는 첫 단계다. provider 키가 없으면 zero-LLM 합성 압축으로 로컬에서 처리하고(기본), <code>AGENTMEMORY_AUTO_COMPRESS=true</code> + 키가 있으면 외부 LLM이 본문을 요약·구조화해 <code>CompressedObservation</code>을 만든다.</p>
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/4.compression.png" alt="AUTO_COMPRESS 분기 — 합성 압축(zero-LLM, 기본) vs LLM 압축(외부 LLM API, 옵트인) → CompressedObservation" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p>한 세션에서 쌓인 압축 관측을 map-reduce로 묶어 <code>SessionSummary</code> 한 건으로 응축한다. 이 요약이 뒤따르는 의미 병합(Tier 1)의 입력이 된다 — <code>mem::summarize</code>.</p>
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/4.session-summerize.png" alt="요약 — 압축 관측 map-reduce 요약 흐름 (mem::summarize)" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p>압축 관측의 title·concepts·files만 읽어 노드와 엣지를 추출한다. 원본 이벤트는 건드리지 않고 검색을 돕는 보조 인덱스에 가깝다 — <code>mem::graph-extract</code>.</p>
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/6.knowledge-graph.png" alt="그래프 — 압축 관측에서 노드·엣지 추출 흐름 (mem::graph-extract)" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <h3>4-tier Consolidation Pipeline</h3>
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/5.4-tier-pipeline.png" alt="4-tier Consolidation Pipeline" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p> 통합은 의미 병합 → 성찰 → 절차 추출 → 감쇠의 4단계로, 비슷한 기억을 합치고 강화하다가 오래된 것은 강도를 낮춘다.</p>
+
+  <div class="layer-stack">
+    <div class="layer-item l-wiki">
+      <div class="layer-badge">Tier 1</div>
+      <div class="layer-body">
+        <strong>Semantic Merge</strong>
+        <span>요약이 ≥5개면 최근 20 SessionSummary를 외부 LLM API에 넣어 공통 사실을 뽑아 <code>mem:semantic</code>에 넣는다. 기존 항목은 accessCount++·confidence=max로 강화하고, 신규는 추가한다.</span>
+      </div>
+    </div>
+    <div class="layer-item l-source">
+      <div class="layer-badge">Tier 2</div>
+      <div class="layer-body">
+        <strong>Reflect</strong>
+        <span>그래프를 BFS depth≤2로 클러스터링한다. 클러스터가 ≥3이면 외부 LLM API를 거쳐 <code>mem:insights</code>에 저장한다 (24h decay sweep).</span>
+      </div>
+    </div>
+    <div class="layer-item l-schema">
+      <div class="layer-badge">Tier 3</div>
+      <div class="layer-body">
+        <strong>Procedural Extraction</strong>
+        <span>frequency≥2 패턴을 외부 LLM API로 뽑아 <code>mem:procedural</code>에 넣고 strength+0.1을 누적한다.</span>
+      </div>
+    </div>
+    <div class="layer-item l-green">
+      <div class="layer-badge">Tier 4</div>
+      <div class="layer-body">
+        <strong>Decay</strong>
+        <span><code>CONSOLIDATION_DECAY_DAYS=30</code>, <code>newStrength = max(0.1, strength × 0.9^⌊daysSince/30⌋)</code>. 30일 경과 단위의 단계적 감쇠(연속 지수 아님). 하한 0.1 — 완전 소멸 없음.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout insight">
+    압축·요약·그래프·통합은 외부 LLM API에 의존하며, <strong>기본값은 꺼진 상태</strong>다.
+    provider 키(OpenAI·Anthropic·Gemini 등, OpenAI 호환 base URL·모델 교체 가능)를 설정하고
+    <code>AGENTMEMORY_AUTO_COMPRESS=true</code>로 켜야 LLM 경로가 활성화된다.
+    키가 없으면 zero-LLM 합성 압축으로 로컬 동작 — 외부 호출 0건.<br><br>
+    <strong>켤 때 고려:</strong> ① 매 PostToolUse마다 LLM 1회 호출(비용 발생)
+    ② 관측 본문이 시크릿·<code>&lt;private&gt;</code>만 마스킹된 채 외부 엔드포인트로 전송
+    ③ 외부 서비스 가용성에 의존.<br>
+    벡터 임베딩은 별개 — 로컬 Xenova(<code>EMBEDDING_PROVIDER=local</code>) 또는 외부 임베딩 API.
+  </div>
+
+  <hr class="divider">
+
+  <!-- ── 4. 기억의 검색·유지 ── -->
+  <h2><span class="num">4</span>기억의 검색·유지</h2>
+
+  <p>관측이 정제된 뒤 어떻게 검색되고, 데몬이 꺼지거나 크래시가 나면 무엇이 살아남는지를 다룬다.</p>
+
+  <h3>RRF 융합 수식</h3>
+
+  <p>smart-search는 절대 점수가 아닌 각 검색기의 순위를 융합(Reciprocal Rank Fusion)한다. 스케일이 다른 BM25와 벡터 점수를 그냥 더하면 한쪽이 지배하지만, 순위 기반 융합은 이 문제가 없다.</p>
+
+<pre style="white-space:pre-wrap;overflow-x:auto">score = 0.4 × 1/(60+bm25Rank)
+      + 0.6 × 1/(60+vecRank)
+      + 0.3 × 1/(60+graphRank)
+<span class="c">// 세 가중치는 실제 적용 전 합산값으로 재정규화된다.
+// 스트림이 비면 해당 항을 제외하고 나머지 가중치를 재정규화.</span></pre>
+
+  <p><code>src/state/hybrid-search.ts:77-240</code></p>
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/7.rrf.png" alt="RRF 융합 — BM25 + Vector + Graph 순위 융합 후 후처리" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <h3>검색 가중치 튜닝</h3>
+
+
+  <div style="margin:20px 0;text-align:center;">
+    <img src="assets/11.setting-tuning.png" alt="검색 가중치 튜닝 가이드 — BM25 / Vector / Graph 조정 기준" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;">
+  </div>
+
+  <p>세 가중치(<code>BM25_WEIGHT</code> 0.4 · <code>VECTOR_WEIGHT</code> 0.6 · <code>AGENTMEMORY_GRAPH_WEIGHT</code> 0.3)는 재정규화되므로 절대값이 아니라 비율만 의미가 있다. 코드 식별자 검색이 잦으면 BM25를 올리고, 개념·패러프레이즈 검색이 잦으면 Vector를 올린다.</p>
+
+  <h3>백그라운드 타이머</h3>
+
+  <p> 데몬이 떠 있는 한 1시간·2시간·24시간 주기로 삭제·통합·감쇠가 자동으로 돌아간다. — <code>src/index.ts:499-539</code></p>
+
+  <div class="check-list">
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>auto-forget — 1시간 <em style="color:#d97706;font-weight:600;">(유일한 자동 삭제)</em></h3>
+        <p>TTL 만료 항목을 지운다. 같은 주제에 대해 내용이 상충하는 기억(Jaccard 유사도 &gt;0.9)은 soft-retire한다. 180일 이상 + importance≤2 관측도 삭제한다.</p>
+        <div class="ref"><code>AUTO_FORGET_INTERVAL_MS</code>로 주기 조절 가능, <code>AUTO_FORGET_ENABLED=false</code>로 비활성화</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>consolidation — 2시간</h3>
+        <p>4-tier 통합 파이프라인을 자동 실행한다 (<code>CONSOLIDATION_ENABLED=true</code>).</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>lesson / insight decay — 24시간</h3>
+        <p>오래된 insight의 strength를 시간에 따라 점진적으로 낮춘다. 하한 0.1이라 완전 소멸은 없다.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ── 5. 잘못 이해하기 쉬운 것들 ── -->
+  <h2><span class="num">5</span>잘못 이해하기 쉬운 것들</h2>
+
+  <p>섹션 1–4를 읽다 보면 "그러면 X는 Y인 건가?"라고 오해하기 쉬운 포인트들이 있다. 아래 항목들은 그런 오해를 교정하기 위한 것이다.</p>
+
+  <div class="check-list">
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>01. LLM 기능은 진짜지만 기본은 꺼져 있다</h3>
+        <p>noop 스텁이 아닌 실제 구현이다. 단, <code>compress</code> · <code>summarize</code> · <code>consolidate</code> · <code>graph-extract</code> · <code>reflect</code>가 실행되려면 provider 키 + <code>AGENTMEMORY_AUTO_COMPRESS=true</code> 설정이 필요하다. 그 전까지는 zero-LLM 로컬 동작. "항상 LLM이 도는 것"도 "구현 안 된 noop"도 아니다.</p>
+        <div class="ref"><code>providers/openai.ts</code> · <code>config.ts</code></div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>02. 그래프는 핵심 지식 저장소가 아니라 보조 인덱스에 가깝다</h3>
+        <p><code>mem::graph-extract</code>는 원본 이벤트를 읽지 않고 압축된 관측의 title·concepts·files만 사용한다. 설계 이유와 운영 함정은 그래프보다 요약·insight에 더 잘 남는다.</p>
+        <div class="ref"><code>graph.ts</code> · <code>prompts/graph-extraction.ts</code></div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>03. "정상 종료해야만 정상 동작하는가?" — 반은 맞고 반은 틀리다</h3>
+        <p>관측(observation)은 훅 이벤트마다 즉시 영속된다 — 세션이 끝나지 않아도. 정상 종료(<code>/stop</code>)가 필요한 것은 <strong>파생 데이터</strong>(요약·그래프·교훈)다. 짧은 세션도 제대로 끝내야 지식이 쌓인다.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>04. 크래시 시 파생 데이터는 유실된다</h3>
+        <p>raw observation은 살아남지만 요약·그래프·교훈은 사라진다. <code>replay/import-jsonl</code>로 부분 복구 가능.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>05. 검색은 BM25 + 벡터 + 그래프를 순위 기반으로 결합한다</h3>
+        <p>절대 점수를 합산하는 것이 아니라 RRF로 합친다. 각 검색기의 원점수보다 "상대 순위"가 더 중요하고, 한 스트림이 비면 나머지 가중치가 재정규화된다.</p>
+        <div class="ref"><code>state/hybrid-search.ts</code></div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>06. 그래프 가중치는 주연이 아니라 보조 신호 수준이다</h3>
+        <p>그래프는 검색 결과를 뒤집는 주체가 아니라 breadcrumb와 추가 후보 확장을 맡는 역할이다. 그래프만 좋다고 해서 검색 품질이 충분히 오르지는 않는다.</p>
+        <div class="ref"><code>hybrid-search.ts</code> · <code>graph-retrieval.ts</code></div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>07. Viewer 그래프 화면은 시각화 도구이지 원천 지식이 아니다</h3>
+        <p>Viewer는 canvas 기반 시각화일 뿐이다. 화면이 비어 있다고 해서 backend 기억 파이프라인 전체가 빈약하다고 단정 짓지 말 것.</p>
+        <div class="ref"><code>viewer/index.html</code></div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <span class="check-icon">✓</span>
+      <div class="check-body">
+        <h3>08. "어떻게 동작하는지"보다 "어디서 깨지는지"가 먼저다</h3>
+        <p>잘못된 기대를 줄이는 게 도입 초반 품질을 가장 빠르게 올린다. 실제로 부딪힌 한계와 그 대응은 3편에서 다룬다.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout key">
+    <strong>자동 수집된 기억을 믿어도 되는가?</strong><br><br>
+    완전한 신뢰는 어렵지만, 여러 장치로 체계적인 기억 저장을 하고 있다.<br><br>
+    • <strong>중복 dedup</strong> — 동일 이벤트는 해시로 걸러 중복 저장을 방지한다.<br>
+    • <strong>importance 임계값</strong> — 세션 시작 컨텍스트 주입 시 중요도 ≥5인 항목만 포함한다.<br>
+    • <strong>Jaccard 기반 모순 감지</strong> — 유사도 &gt;0.9인 상충 기억을 auto-forget이 soft-retire한다.<br>
+    • <strong>Confidence 누적 강화</strong> — 같은 사실이 여러 세션에서 반복 관측될수록 confidence가 높아진다.<br>
+    • <strong>24시간 decay</strong> — 오래된 insight의 strength가 점진적으로 낮아진다.<br><br>
+    
+    다음 시리즈에서는 몇개월동안 누적된 내 세션 500여개를 바탕으로 agentmemory로 데이터를 실제 저장해보고 활용한 내용을 공유할 예정이다.
+    자동 수집되는 기준을 정의하는 것이 중요하다 판단됐는데 이 내용도 다뤄질 예정이다. 
+  </div>
+
+  <!-- ── 5. 3편 훅 ── -->
+  <div class="verdict">
+    <div class="v-label">다음 편</div>
+    <p>
+      2편은 시스템이 어떻게 동작하는지를 다뤘다.
+      <strong>어디서 깨지고 무엇이 아쉬운지는 3편에서 실제로 써본 경험으로 다룬다.</strong>
+      무엇을 불편하다고 판단했는지, 어떻게 수정했는지, 내 하네스에 어떻게 녹였는지 — 도입을 고려 중이라면 3편이 더 바로 쓸 수 있는 내용일 것이다.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
