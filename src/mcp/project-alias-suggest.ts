@@ -14,6 +14,21 @@ import {
 } from "./project-aliases.js";
 import { randomUUID } from "node:crypto";
 
+// Serializes all suggestAliasIfNew calls so concurrent invocations cannot
+// interleave their read-modify-write sequences across the await boundary in
+// collectKnownProjects. Without this, two simultaneous calls both read the
+// same empty pending store, each append an entry, and the second write
+// silently discards the first entry.
+let _lock = Promise.resolve<void>(undefined);
+function withLock(fn: () => Promise<void>): Promise<void> {
+  const next = _lock.then(fn);
+  _lock = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
 const JACCARD_THRESHOLD = 0.3;
 
 // Returns all distinct project values currently stored in sessions.
@@ -64,10 +79,11 @@ function isPendingPair(a: string, b: string): boolean {
 }
 
 // Called when a new project value is encountered. Fire-and-forget — never throws.
-export async function suggestAliasIfNew(
-  newProject: string,
-  kv: StateKV,
-): Promise<void> {
+export function suggestAliasIfNew(newProject: string, kv: StateKV): Promise<void> {
+  return withLock(() => _suggestImpl(newProject, kv));
+}
+
+async function _suggestImpl(newProject: string, kv: StateKV): Promise<void> {
   try {
     if (isAlreadyKnown(newProject)) return;
 
