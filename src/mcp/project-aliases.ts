@@ -62,14 +62,21 @@ export function resolveCanonicalProject(name: string): string {
 // Returns all names that should be accepted when filtering by the given project:
 // [canonical, ...aliases]. When no mapping exists, returns [name].
 export function expandProjectAliases(name: string): string[] {
-  const canonical = resolveCanonicalProject(name);
   const aliases = loadProjectAliases();
+  const canonical = _resolveCanonicalFrom(name, aliases);
+  const entry = aliases.find((e) => e.canonical === canonical);
+  return entry ? [canonical, ...entry.aliases] : [canonical];
+}
+
+// Internal helper: resolve canonical from a pre-loaded alias list to avoid
+// calling loadProjectAliases() twice in expandProjectAliases.
+function _resolveCanonicalFrom(name: string, aliases: ProjectAlias[]): string {
+  if (!name.trim()) return "default";
   for (const entry of aliases) {
-    if (entry.canonical === canonical) {
-      return [canonical, ...entry.aliases];
-    }
+    if (entry.canonical === name) return name;
+    if (entry.aliases.includes(name)) return entry.canonical;
   }
-  return [canonical];
+  return name;
 }
 
 export function saveProjectAliases(aliases: ProjectAlias[]): void {
@@ -159,9 +166,11 @@ export function savePendingAliases(store: PendingAliasStore): void {
 // Confident-match helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+const SEPARATOR_RE = /[\s\-_./]+/g;
+
 // Strips case and separators for exact-match comparison: "E-mail" → "email"
 export function normalizeForCompare(name: string): string {
-  return name.toLowerCase().replace(/[\s\-_./]+/g, "");
+  return name.toLowerCase().replace(SEPARATOR_RE, "");
 }
 
 export function isAbsolutePath(name: string): boolean {
@@ -204,7 +213,7 @@ export function findConfidentMatch(
 function tokenize(name: string): Set<string> {
   return new Set(
     name
-      .split(/[-_/.\s]+/)
+      .split(SEPARATOR_RE)
       .map((t) => t.toLowerCase())
       .filter((t) => t.length > 0),
   );
