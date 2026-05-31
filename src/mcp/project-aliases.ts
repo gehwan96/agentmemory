@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync, renameSync, realpathSync } from "node:fs";
-import { join, basename } from "node:path";
+import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, realpathSync } from "node:fs";
+import { join, basename, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 
@@ -48,7 +48,9 @@ export function invalidateAliasCache(): void {
 
 // Returns the canonical name for any project name (alias or canonical).
 // Falls back to the input value when no mapping is found.
+// Empty or whitespace-only names are normalized to "default".
 export function resolveCanonicalProject(name: string): string {
+  if (!name.trim()) return "default";
   const aliases = loadProjectAliases();
   for (const entry of aliases) {
     if (entry.canonical === name) return name;
@@ -73,9 +75,14 @@ export function expandProjectAliases(name: string): string[] {
 export function saveProjectAliases(aliases: ProjectAlias[]): void {
   const file = getAliasesFile();
   const tmp = file + "." + randomBytes(4).toString("hex") + ".tmp";
-  writeFileSync(tmp, JSON.stringify({ aliases }, null, 2), "utf-8");
-  renameSync(tmp, file);
-  invalidateAliasCache();
+  try {
+    writeFileSync(tmp, JSON.stringify({ aliases }, null, 2), "utf-8");
+    renameSync(tmp, file);
+    invalidateAliasCache();
+  } catch (err) {
+    try { unlinkSync(tmp); } catch { /* best-effort cleanup */ }
+    throw err;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,9 +145,14 @@ export function invalidatePendingCache(): void {
 export function savePendingAliases(store: PendingAliasStore): void {
   const file = getPendingFile();
   const tmp = file + "." + randomBytes(4).toString("hex") + ".tmp";
-  writeFileSync(tmp, JSON.stringify(store, null, 2), "utf-8");
-  renameSync(tmp, file);
-  invalidatePendingCache();
+  try {
+    writeFileSync(tmp, JSON.stringify(store, null, 2), "utf-8");
+    renameSync(tmp, file);
+    invalidatePendingCache();
+  } catch (err) {
+    try { unlinkSync(tmp); } catch { /* best-effort cleanup */ }
+    throw err;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +165,7 @@ export function normalizeForCompare(name: string): string {
 }
 
 export function isAbsolutePath(name: string): boolean {
-  return name.startsWith("/") || /^[A-Za-z]:[\\/]/.test(name);
+  return isAbsolute(name);
 }
 
 // Returns [signal, matchedCanonical] if a confident match is found, otherwise null.
