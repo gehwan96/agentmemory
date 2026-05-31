@@ -1875,6 +1875,15 @@ export function registerMcpEndpoints(
   // ─────────────────────────────────────────────────────────────────────────
   // Project Alias REST API (used by the :3113 web viewer admin UI)
   // ─────────────────────────────────────────────────────────────────────────
+  // Single-writer lock for approve/reject: prevents two simultaneous admin
+  // requests from both reading the same pending store, each removing an
+  // entry, and one silently overwriting the other's change.
+  let _aliasWriteLock = Promise.resolve<void>(undefined);
+  function withAliasLock(fn: () => Promise<void>): Promise<void> {
+    const next = _aliasWriteLock.then(fn);
+    _aliasWriteLock = next.then(() => undefined, () => undefined);
+    return next;
+  }
 
   sdk.registerFunction(
     "aliases::confirmed::get",
@@ -1971,25 +1980,29 @@ export function registerMcpEndpoints(
       if (!id) {
         return { status_code: 400, body: { error: "id path param required" } };
       }
-      const store = loadPendingAliases();
-      const idx = store.pending.findIndex((p) => p.id === id);
-      if (idx === -1) {
-        return { status_code: 404, body: { error: "pending entry not found" } };
-      }
-      const entry = store.pending[idx]!;
-      const canonical = asNonEmptyString(req.body?.canonical) ?? entry.projectA;
-      const alias = canonical === entry.projectA ? entry.projectB : entry.projectA;
-      store.pending.splice(idx, 1);
-      savePendingAliases(store);
-      const confirmed = loadProjectAliases();
-      const existing = confirmed.find((e) => e.canonical === canonical);
-      if (existing) {
-        if (!existing.aliases.includes(alias)) existing.aliases.push(alias);
-      } else {
-        confirmed.push({ canonical, aliases: [alias] });
-      }
-      saveProjectAliases(confirmed);
-      return { status_code: 200, body: { ok: true } };
+      let result: McpResponse = { status_code: 200, body: { ok: true } };
+      await withAliasLock(async () => {
+        const store = loadPendingAliases();
+        const idx = store.pending.findIndex((p) => p.id === id);
+        if (idx === -1) {
+          result = { status_code: 404, body: { error: "pending entry not found" } };
+          return;
+        }
+        const entry = store.pending[idx]!;
+        const canonical = asNonEmptyString(req.body?.canonical) ?? entry.projectA;
+        const alias = canonical === entry.projectA ? entry.projectB : entry.projectA;
+        store.pending.splice(idx, 1);
+        savePendingAliases(store);
+        const confirmed = loadProjectAliases();
+        const existing = confirmed.find((e) => e.canonical === canonical);
+        if (existing) {
+          if (!existing.aliases.includes(alias)) existing.aliases.push(alias);
+        } else {
+          confirmed.push({ canonical, aliases: [alias] });
+        }
+        saveProjectAliases(confirmed);
+      });
+      return result;
     },
   );
   sdk.registerTrigger({
@@ -2008,19 +2021,23 @@ export function registerMcpEndpoints(
       if (!id) {
         return { status_code: 400, body: { error: "id path param required" } };
       }
-      const store = loadPendingAliases();
-      const idx = store.pending.findIndex((p) => p.id === id);
-      if (idx === -1) {
-        return { status_code: 404, body: { error: "pending entry not found" } };
-      }
-      const entry = store.pending.splice(idx, 1)[0]!;
-      store.rejected.push({
-        projectA: entry.projectA,
-        projectB: entry.projectB,
-        rejectedAt: new Date().toISOString(),
+      let result: McpResponse = { status_code: 200, body: { ok: true } };
+      await withAliasLock(async () => {
+        const store = loadPendingAliases();
+        const idx = store.pending.findIndex((p) => p.id === id);
+        if (idx === -1) {
+          result = { status_code: 404, body: { error: "pending entry not found" } };
+          return;
+        }
+        const entry = store.pending.splice(idx, 1)[0]!;
+        store.rejected.push({
+          projectA: entry.projectA,
+          projectB: entry.projectB,
+          rejectedAt: new Date().toISOString(),
+        });
+        savePendingAliases(store);
       });
-      savePendingAliases(store);
-      return { status_code: 200, body: { ok: true } };
+      return result;
     },
   );
   sdk.registerTrigger({

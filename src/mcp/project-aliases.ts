@@ -242,8 +242,17 @@ export function isPendingProject(name: string): boolean {
   return pending.some((p) => p.projectA === canonical || p.projectB === canonical);
 }
 
-// Like expandProjectAliases but also includes pending-pair partners.
-// Used during search when the project is still under review.
+/**
+ * Like expandProjectAliases but also includes pending-pair partners.
+ *
+ * @internal
+ * WARNING: Do NOT use this function in memory search or filter paths.
+ * Including pending (unapproved) aliases in a search would expose memories
+ * from unrelated projects before a human has confirmed the mapping, breaking
+ * the project-isolation guarantee. This function exists only for alias
+ * management UI logic (e.g. showing "would merge with X" hints).
+ * For search, always use expandProjectAliases() with confirmed aliases only.
+ */
 export function expandWithPending(name: string): string[] {
   const base = expandProjectAliases(name);
   const canonical = resolveCanonicalProject(name);
